@@ -97,6 +97,14 @@ export function generatePlayer({
   const wage = Math.round(((overall - 50) ** 2) * 0.4 + 5);
   const marketValue = Math.round(wage * 36 * (overall / 70));
 
+  // Potencial oculto: jovens têm mais margem de crescimento
+  const potGap = age < 20 ? 20 + Math.floor(rng() * 15)
+               : age < 24 ? 12 + Math.floor(rng() * 10)
+               : age < 28 ? 5  + Math.floor(rng() * 8)
+               : age < 32 ? 2  + Math.floor(rng() * 5)
+               :             0  + Math.floor(rng() * 3);
+  const potential = clamp(overall + potGap, overall, 95);
+
   return {
     id: nanoid(8),
     name: generateName(rng),
@@ -109,6 +117,7 @@ export function generatePlayer({
     technique,
     stamina,
     overall,
+    potential,
     morale: 70 + Math.floor(rng() * 20),
     fitness: 90 + Math.floor(rng() * 10),
     yellowCardsInComp: {},
@@ -123,6 +132,63 @@ export function generatePlayer({
       redCards: 0,
       minutesPlayed: 0,
     },
+  };
+}
+
+// ============================================================
+// Gera um jovem da base (16-18 anos, overall baixo, alto potencial)
+// ============================================================
+
+export function generateYouthPlayer(seed: number, baseSeason = 2026): Player {
+  const rng = createRng(seed);
+  const positions: Position[] = ['GK', 'DF', 'MF', 'FW'];
+  const position = positions[Math.floor(rng() * 4)];
+  const age = 16 + Math.floor(rng() * 3); // 16, 17 ou 18 anos
+
+  const base = 42 + Math.floor(rng() * 16); // overall bruto 42-58
+  const dist = (mod: number) =>
+    clamp(Math.round(base + mod + (rng() * 10 - 5)), 25, 78);
+
+  let attack: number, defense: number, pace: number, technique: number, stamina: number;
+  switch (position) {
+    case 'GK':
+      attack = dist(-25); defense = dist(+5); pace = dist(-10); technique = dist(0); stamina = dist(-5);
+      break;
+    case 'DF':
+      attack = dist(-12); defense = dist(+8); pace = dist(0); technique = dist(-3); stamina = dist(+3);
+      break;
+    case 'MF':
+      attack = dist(0); defense = dist(0); pace = dist(0); technique = dist(+5); stamina = dist(+5);
+      break;
+    default: // FW
+      attack = dist(+8); defense = dist(-15); pace = dist(+5); technique = dist(+3); stamina = dist(0);
+  }
+
+  const overall = clamp(base, 40, 65);
+  const potential = clamp(base + 15 + Math.floor(rng() * 20), overall + 10, 90);
+  const wage = 2 + Math.floor(rng() * 3);
+  const marketValue = Math.round(wage * 24);
+
+  return {
+    id: nanoid(8),
+    name: generateName(rng),
+    age,
+    position,
+    foot: rng() < 0.75 ? 'R' : rng() < 0.9 ? 'L' : 'B',
+    attack,
+    defense,
+    pace,
+    technique,
+    stamina,
+    overall,
+    potential,
+    morale: 80 + Math.floor(rng() * 15),
+    fitness: 90 + Math.floor(rng() * 10),
+    yellowCardsInComp: {},
+    contractUntil: baseSeason + 1 + Math.ceil(rng() * 2),
+    wageMonthly: wage,
+    marketValue,
+    stats: { appearances: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, minutesPlayed: 0 },
   };
 }
 

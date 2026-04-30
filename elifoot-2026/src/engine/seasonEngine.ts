@@ -1,0 +1,221 @@
+import { nanoid } from 'nanoid';
+import type {
+  SaveGame,
+  Team,
+  BoardObjective,
+  ObjectiveType,
+} from '@/types';
+import { sortStandings } from '@/competitions/brasileirao';
+import { autoPickStartingEleven, generatePlayer, generateYouthPlayer } from '@/engine/playerGenerator';
+import { clamp, createRng } from '@/utils/random';
+
+// ============================================================
+// Detecta se a temporada encerrou
+// ============================================================
+
+export function isSeasonOver(save: SaveGame): boolean {
+  const brasileirao = save.competitions.find((c) => c.format === 'round_robin');
+  if (!brasileirao) return false;
+  return brasileirao.finished || brasileirao.fixtures.every((f) => f.played);
+}
+
+// ============================================================
+// Gera objetivos da diretoria com base no tier
+// ============================================================
+
+export function generateBoardObjectives(userTeam: Team): BoardObjective[] {
+  const tier = userTeam.tier;
+  const objectives: BoardObjective[] = [];
+
+  const add = (type: ObjectiveType, description: string, targetValue?: number) => {
+    objectives.push({ id: nanoid(8), type, description, targetValue, status: 'pending' });
+  };
+
+  if (tier === 'elite') {
+    add('league_title', 'Vença o Brasileirão');
+    add('qualify_libertadores', 'Classifique-se para a Libertadores (top 6)');
+    add('cup_win', 'Vença a Copa do Brasil');
+  } else if (tier === 'top') {
+    add('league_position', 'Termine no top 4 do Brasileirão', 4);
+    add('avoid_relegation', 'Evite o rebaixamento (top 16)');
+    add('qualify_libertadores', 'Classifique-se para a Libertadores (top 6)');
+  } else if (tier === 'mid') {
+    add('league_position', 'Termine no top 10 do Brasileirão', 10);
+    add('avoid_relegation', 'Evite o rebaixamento (top 16)');
+  } else {
+    add('avoid_relegation', 'Sobreviva na Série A — fique no top 16');
+    add('league_position', 'Supere as expectativas — termine no top 14', 14);
+  }
+
+  return objectives;
+}
+
+// ============================================================
+// Processa fim de temporada: avalia objetivos, registra história
+// ============================================================
+
+export function processSeasonEnd(save: SaveGame): void {
+  const brasileirao = save.competitions.find((c) => c.format === 'round_robin');
+  const copa = save.competitions.find((c) => c.format === 'pure_knockout');
+
+  const standings = brasileirao
+    ? sortStandings(brasileirao.standings, save.teams)
+    : [];
+  const userPosition = standings.findIndex((s) => s.teamId === save.controlledTeamId) + 1;
+
+  // Avaliar objetivos
+  save.boardObjectives.forEach((obj) => {
+    if (obj.status !== 'pending') return;
+    switch (obj.type) {
+      case 'league_title':
+        obj.status = brasileirao?.championId === save.controlledTeamId ? 'achieved' : 'failed';
+        break;
+      case 'league_position':
+        obj.status = userPosition > 0 && userPosition <= (obj.targetValue ?? 4) ? 'achieved' : 'failed';
+        break;
+      case 'avoid_relegation':
+        obj.status = userPosition > 0 && userPosition <= 16 ? 'achieved' : 'failed';
+        break;
+      case 'cup_win':
+        obj.status = copa?.championId === save.controlledTeamId ? 'achieved' : 'failed';
+        break;
+      case 'qualify_libertadores':
+        obj.status = userPosition > 0 && userPosition <= 6 ? 'achieved' : 'failed';
+        break;
+    }
+  });
+
+  // Hall da fama
+  save.competitions.forEach((comp) => {
+    if (!comp.championId) return;
+    const champ = save.teams.find((t) => t.id === comp.championId);
+    if (!champ) return;
+    if (!save.hallOfFame.some((h) => h.season === save.season && h.competitionName === comp.name)) {
+      save.hallOfFame.push({
+        season: save.season,
+        competitionName: comp.name,
+        championName: champ.name,
+      });
+    }
+  });
+
+  // Registro da temporada
+  const titles = save.competitions
+    .filter((c) => c.championId === save.controlledTeamId)
+    .map((c) => c.name);
+
+  const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+  save.seasonRecords.push({
+    season: save.season,
+    teamName: userTeam?.name ?? '',
+    leaguePosition: userPosition || 0,
+    objectivesAchieved: save.boardObjectives.filter((o) => o.status === 'achieved').length,
+    objectivesTotal: save.boardObjectives.length,
+    titles,
+    budget: userTeam?.budget ?? 0,
+  });
+
+  save.seasonOver = true;
+
+  // Verificar objetivos críticos para risco de demissão
+  const criticalFailed = save.boardObjectives.some(
+    (o) =>
+      (o.type === 'avoid_relegation' || o.type === 'league_title') &&
+      o.status === 'failed',
+  );
+  if (criticalFailed) {
+    save.managerWarnings = (save.managerWarnings ?? 0) + 1;
+    if (save.managerWarnings >= 2) {
+      save.dismissed = true;
+    }
+  } else {
+    // Objetivos críticos cumpridos: resetar avisos
+    save.managerWarnings = 0;
+  }
+}
+
+// ============================================================
+// Inicia nova temporada
+// ============================================================
+
+export function startNewSeason(save: SaveGame): void {
+  const prevSeason = save.season;
+  save.season = prevSeason + 1;
+  save.currentTurn = 1;
+  save.seasonStartTurn = 1;
+  save.seasonEndTurn = 280;
+  save.seasonOver = false;
+
+  // ── Envelhecer jogadores e lidar com contratos ────────────
+  save.teams.forEach((team) => {
+    team.squad = team.squad.filter((p) => {
+      p.age += 1;
+      p.stats = { appearances: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, minutesPlayed: 0 };
+      p.yellowCardsInComp = {};
+      p.fitness = clamp(p.fitness + 10, 60, 100);
+      p.morale = 75;
+      p.injuredUntil = undefined;
+
+      // Aposentadoria: probabilidade crescente após 35
+      if (p.age > 35) {
+        const retirementProb = (p.age - 35) * 0.25;
+        if (Math.random() < retirementProb) return false; // remove do elenco
+      }
+
+      // Contratos expirados — jogadores saem se não renovados (usuário ou IA)
+      if (p.contractUntil < save.season) {
+        if (team.isUserControlled) {
+          return false; // contrato não renovado → atleta vai embora
+        } else {
+          if (Math.random() < 0.5) {
+            p.contractUntil = save.season + Math.ceil(Math.random() * 3);
+          } else {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+
+    // Repor elenco abaixo de 18 jogadores com jogadores gerados
+    const shortage = 18 - team.squad.length;
+    if (shortage > 0) {
+      const rng = createRng(save.season * 100 + team.squad.length);
+      for (let i = 0; i < shortage; i++) {
+        const positions = ['GK', 'DF', 'MF', 'FW'] as const;
+        const pos = positions[Math.floor(rng() * 4)];
+        const newPlayer = generatePlayer({ position: pos, tier: team.tier, isStarter: false, rng });
+        newPlayer.contractUntil = save.season + Math.ceil(rng() * 3) + 1;
+        team.squad.push(newPlayer);
+      }
+    }
+
+    // Atualizar escalação
+    const { starting, bench } = autoPickStartingEleven(team.squad, team.formation);
+    team.starting11 = starting;
+    team.bench = bench;
+  });
+
+  // ── Gerar novas competições ───────────────────────────────
+  // (importado dinamicamente para evitar dependência circular)
+  // O gameStore chama generateInitialCompetitions após esta função
+
+  // ── Novos objetivos da diretoria ─────────────────────────
+  const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+  if (userTeam) {
+    save.boardObjectives = generateBoardObjectives(userTeam);
+  }
+
+  // ── Limpar mercado e histórico financeiro ─────────────────
+  save.transferMarket = save.transferMarket.filter((l) => l.status !== 'open');
+  // Mantém apenas o histórico do mês passado
+  const keepFrom = Math.max(0, save.currentTurn - 30);
+  save.financeHistory = save.financeHistory.filter((r) => r.turn >= keepFrom);
+
+  // ── Nova safra da base ────────────────────────────────────
+  save.youthPlayers = [
+    generateYouthPlayer(save.season * 300 + 1, save.season),
+    generateYouthPlayer(save.season * 300 + 2, save.season),
+    generateYouthPlayer(save.season * 300 + 3, save.season),
+  ];
+}

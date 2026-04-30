@@ -106,8 +106,16 @@ function pickFouler(team: Team, rng: () => number): Player | undefined {
 export interface SimulateOptions {
   isNeutralVenue?: boolean;
   seed?: number;
-  // Para mata mata, força decisão por penalties caso empate
   decidePenalties?: boolean;
+  // Postura tática do time da casa e visitante
+  homePosture?: 'attack' | 'balanced' | 'defensive';
+  awayPosture?: 'attack' | 'balanced' | 'defensive';
+  // Pressing do time da casa e visitante
+  homePressing?: 'high' | 'medium' | 'low';
+  awayPressing?: 'high' | 'medium' | 'low';
+  // Intervalo de minutos simulados (para simulação em dois tempos)
+  minuteStart?: number; // padrão: 1
+  minuteEnd?: number;   // padrão: 90
 }
 
 export function simulateMatch(
@@ -120,6 +128,29 @@ export function simulateMatch(
 
   const homeStrength = calculateStrength(home);
   const awayStrength = calculateStrength(away);
+
+  // Modificadores de postura tática
+  const postureModifier = (posture: SimulateOptions['homePosture']): { atk: number; def: number } => {
+    if (posture === 'attack')    return { atk: 1.20, def: 0.85 };
+    if (posture === 'defensive') return { atk: 0.80, def: 1.20 };
+    return { atk: 1.0, def: 1.0 }; // balanced
+  };
+
+  const pressingModifier = (pressing: SimulateOptions['homePressing']): number => {
+    if (pressing === 'high') return 1.12;
+    if (pressing === 'low')  return 0.90;
+    return 1.0;
+  };
+
+  const homeMod  = postureModifier(options.homePosture);
+  const awayMod  = postureModifier(options.awayPosture);
+  const homePress = pressingModifier(options.homePressing);
+  const awayPress = pressingModifier(options.awayPressing);
+
+  homeStrength.attack   *= homeMod.atk  * homePress;
+  homeStrength.defense  *= homeMod.def;
+  awayStrength.attack   *= awayMod.atk  * awayPress;
+  awayStrength.defense  *= awayMod.def;
 
   // Vantagem de mando
   const homeAdvantage = options.isNeutralVenue ? 1.0 : 1.08;
@@ -144,7 +175,7 @@ export function simulateMatch(
   const totalAttack = homeStrength.attack + awayStrength.attack;
   const eventChancePerMinute = clamp(0.06 + totalAttack / 4000, 0.05, 0.14);
 
-  for (let minute = 1; minute <= 90; minute++) {
+  for (let minute = (options.minuteStart ?? 1); minute <= (options.minuteEnd ?? 90); minute++) {
     if (rng() > eventChancePerMinute) continue;
 
     // Quem ataca? Pondera força ofensiva contra defensiva oposta
@@ -280,7 +311,7 @@ export function simulateMatch(
   return result;
 }
 
-function simulatePenaltyShootout(
+export function simulatePenaltyShootout(
   home: Team,
   away: Team,
   rng: () => number,

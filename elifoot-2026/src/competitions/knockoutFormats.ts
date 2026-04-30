@@ -176,7 +176,6 @@ export function createGroupsKnockout(
 
   // Gera fixtures de fase de grupos: ida e volta entre todos do grupo
   const fixtures: Fixture[] = [];
-  let round = 1;
   for (const groupName of groupNames) {
     const grp = groups[groupName];
     // Ida e volta: 6 jogos por time se 4 times, distribuídos em 6 rodadas
@@ -230,6 +229,7 @@ export function createGroupsKnockout(
     totalRounds: 6 + 8, // 6 rodadas de grupo + ~8 jogos mata-mata aproximado
     finished: false,
     knockoutBracket: [],
+    singleLegKnockout: !(cfg.knockoutTwoLeg ?? true), // false = ida e volta, true = jogo único
   };
 }
 

@@ -1,7 +1,10 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { Home, Trophy, Users, Calendar, LogOut, Save } from 'lucide-react';
+import { Home, Trophy, Users, Calendar, LogOut, Save, ArrowRightLeft, Dumbbell, DollarSign, Shield, History, Volume2, VolumeX } from 'lucide-react';
 import clsx from 'clsx';
+import { useI18nStore, useT, type Lang } from '@/i18n';
+import { soundEngine } from '@/engine/soundEngine';
 
 export default function Layout() {
   const save = useGameStore((s) => s.save);
@@ -9,11 +12,17 @@ export default function Layout() {
   const closeGame = useGameStore((s) => s.closeGame);
   const saveGame = useGameStore((s) => s.saveGame);
   const navigate = useNavigate();
+  const t = useT();
+  const { lang, setLang } = useI18nStore();
+  const [soundOn, setSoundOn] = useState(soundEngine.enabled);
 
-  if (!save) {
-    navigate('/');
-    return null;
-  }
+  const LANGS: Lang[] = ['pt', 'en', 'es'];
+
+  useEffect(() => {
+    if (!save) navigate('/');
+  }, [save, navigate]);
+
+  if (!save) return null;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -35,22 +44,43 @@ export default function Layout() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Seletor de idioma */}
+            <div className="hidden sm:flex gap-0.5 bg-midnight-800 rounded p-0.5">
+              {LANGS.map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLang(l)}
+                  className={`text-[10px] uppercase px-1.5 py-0.5 rounded transition-colors ${
+                    lang === l ? 'bg-pitch-600 text-white font-semibold' : 'text-white/40 hover:text-white'
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            {/* Toggle de som */}
+            <button
+              className="btn-ghost text-sm p-2"
+              title={soundOn ? t('sound_on') : t('sound_off')}
+              onClick={() => setSoundOn(soundEngine.toggle())}
+            >
+              {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-white/30" />}
+            </button>
+
             <button
               className="btn-ghost text-sm flex items-center gap-1"
               onClick={() => saveGame()}
-              title="Salvar jogo"
+              title={t('save')}
             >
-              <Save className="w-4 h-4" /> Salvar
+              <Save className="w-4 h-4" /> {t('save')}
             </button>
             <button
               className="btn-ghost text-sm flex items-center gap-1"
-              onClick={() => {
-                closeGame();
-                navigate('/');
-              }}
-              title="Voltar ao menu"
+              onClick={() => { closeGame(); navigate('/'); }}
+              title={t('exit')}
             >
-              <LogOut className="w-4 h-4" /> Sair
+              <LogOut className="w-4 h-4" /> {t('exit')}
             </button>
           </div>
         </div>
@@ -59,9 +89,15 @@ export default function Layout() {
       {/* Body */}
       <div className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 flex gap-6">
         <nav className="hidden md:flex flex-col gap-1 w-52 panel p-3 h-fit sticky top-6">
-          <NavItem to="/game" icon={<Home className="w-4 h-4" />}>Início</NavItem>
-          <NavItem to="/game/squad" icon={<Users className="w-4 h-4" />}>Elenco</NavItem>
-          <NavItem to="/game/fixtures" icon={<Calendar className="w-4 h-4" />}>Calendário</NavItem>
+          <NavItem to="/game" icon={<Home className="w-4 h-4" />}>{t('nav_home')}</NavItem>
+          <NavItem to="/game/squad" icon={<Users className="w-4 h-4" />}>{t('nav_squad')}</NavItem>
+          <NavItem to="/game/fixtures" icon={<Calendar className="w-4 h-4" />}>{t('nav_fixtures')}</NavItem>
+          <NavItem to="/game/transfers" icon={<ArrowRightLeft className="w-4 h-4" />}>{t('nav_transfers')}</NavItem>
+          <NavItem to="/game/training" icon={<Dumbbell className="w-4 h-4" />}>{t('nav_training')}</NavItem>
+          <NavItem to="/game/finance" icon={<DollarSign className="w-4 h-4" />}>{t('nav_finance')}</NavItem>
+          <NavItem to="/game/tactics" icon={<Shield className="w-4 h-4" />}>{t('nav_tactics')}</NavItem>
+          <NavItem to="/game/history" icon={<History className="w-4 h-4" />}>{t('nav_history')}</NavItem>
+          <div className="px-3 pt-3 pb-1 text-xs uppercase tracking-wider text-white/30">{t('nav_competitions')}</div>
           {save.competitions.map((c) => (
             <NavItem
               key={c.id}

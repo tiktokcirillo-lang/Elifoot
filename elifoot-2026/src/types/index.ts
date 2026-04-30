@@ -4,6 +4,113 @@
 
 export type Position = 'GK' | 'DF' | 'MF' | 'FW';
 
+// ============================================================
+// Mercado de transferências
+// ============================================================
+
+export interface TransferBid {
+  id: string;
+  fromTeamId: string;
+  amount: number; // em milhares
+  turn: number;
+  status: 'pending' | 'accepted' | 'rejected';
+}
+
+export interface TransferListing {
+  id: string;
+  playerId: string;
+  fromTeamId: string;
+  askingPrice: number; // em milhares
+  turn: number;
+  status: 'open' | 'sold' | 'withdrawn';
+  bids: TransferBid[];
+}
+
+// ============================================================
+// Treinamento
+// ============================================================
+
+export type TrainingType = 'attack' | 'defense' | 'fitness' | 'technique' | 'tactics' | 'rest';
+export type TrainingIntensity = 'light' | 'normal' | 'heavy';
+
+export interface TrainingPlan {
+  type: TrainingType;
+  intensity: TrainingIntensity;
+}
+
+// ============================================================
+// Tática
+// ============================================================
+
+export type TacticalPosture = 'attack' | 'balanced' | 'defensive';
+export type PressingLevel = 'high' | 'medium' | 'low';
+
+export interface TacticalSetup {
+  posture: TacticalPosture;
+  pressing: PressingLevel;
+  penaltyTakerId: string | null;
+  cornerTakerId: string | null;
+}
+
+// ============================================================
+// Financeiro
+// ============================================================
+
+export type FinanceType =
+  | 'sponsor'
+  | 'ticket'
+  | 'tv_rights'
+  | 'wages'
+  | 'transfer_in'
+  | 'transfer_out';
+
+export interface FinanceRecord {
+  id: string;
+  turn: number;
+  type: FinanceType;
+  amount: number; // positivo = receita, negativo = despesa (em milhares)
+  description: string;
+}
+
+// ============================================================
+// Objetivos da diretoria
+// ============================================================
+
+export type ObjectiveType =
+  | 'league_title'
+  | 'league_position'
+  | 'avoid_relegation'
+  | 'cup_win'
+  | 'qualify_libertadores';
+
+export interface BoardObjective {
+  id: string;
+  type: ObjectiveType;
+  description: string;
+  targetValue?: number; // ex: top 4 → 4
+  status: 'pending' | 'achieved' | 'failed';
+}
+
+// ============================================================
+// Multitemporada
+// ============================================================
+
+export interface SeasonRecord {
+  season: number;
+  teamName: string;
+  leaguePosition: number;
+  objectivesAchieved: number;
+  objectivesTotal: number;
+  titles: string[]; // nomes das competições vencidas
+  budget: number; // saldo final da temporada
+}
+
+export interface HallOfFameEntry {
+  season: number;
+  competitionName: string;
+  championName: string;
+}
+
 export type Foot = 'L' | 'R' | 'B';
 
 export interface Player {
@@ -20,6 +127,7 @@ export interface Player {
   stamina: number;
   // Derivado
   overall: number;
+  potential?: number; // teto secreto de crescimento (1-99)
   // Estado
   morale: number; // 0 a 100
   fitness: number; // 0 a 100
@@ -159,6 +267,7 @@ export interface Competition {
   totalRounds: number;
   finished: boolean;
   championId?: string;
+  singleLegKnockout?: boolean; // true = mata-mata em jogo único (Mundial, Copa do Mundo)
 }
 
 export interface KnockoutPair {
@@ -199,4 +308,22 @@ export interface SaveGame {
   // Calendário
   seasonStartTurn: number;
   seasonEndTurn: number;
+  // Mercado de transferências
+  transferMarket: TransferListing[];
+  // Treinamento
+  trainingPlan: TrainingPlan;
+  // Tática
+  tacticalSetup: TacticalSetup;
+  // Financeiro
+  financeHistory: FinanceRecord[];
+  boardObjectives: BoardObjective[];
+  // Multitemporada
+  seasonRecords: SeasonRecord[];
+  hallOfFame: HallOfFameEntry[];
+  seasonOver: boolean;
+  // Base (academia juvenil)
+  youthPlayers: Player[];
+  // Estabilidade do técnico
+  managerWarnings: number; // avisos consecutivos por falha em objetivos críticos
+  dismissed?: boolean;
 }

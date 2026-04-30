@@ -1,23 +1,47 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import { buildBrasileiraoTeams } from '@/data/brasileiraoTeams';
-import { ArrowLeft } from 'lucide-react';
+import { loadCustomTeams } from '@/pages/CustomTeamPage';
+import type { CustomTeamSeed } from '@/pages/CustomTeamPage';
+import { ArrowLeft, Plus, Pencil } from 'lucide-react';
 
-const teamsPreview = buildBrasileiraoTeams();
+const brTeamsPreview = buildBrasileiraoTeams();
 
 export default function NewGamePage() {
   const [managerName, setManagerName] = useState('');
   const [saveName, setSaveName] = useState('Carreira 1');
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
+  const [customTeams, setCustomTeams] = useState<CustomTeamSeed[]>([]);
   const newGame = useGameStore((s) => s.newGame);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setCustomTeams(loadCustomTeams());
+  }, []);
 
   async function handleStart() {
     if (!managerName.trim() || !selectedTeam) return;
     await newGame(managerName.trim(), selectedTeam, saveName.trim() || 'Carreira');
     navigate('/game');
   }
+
+  const teamCard = (id: string, shortName: string, name: string, tier: string, primary: string, secondary: string) => (
+    <button
+      key={id}
+      onClick={() => setSelectedTeam(id)}
+      className={`panel p-3 text-left transition-all hover:scale-[1.02] ${selectedTeam === id ? 'ring-2 ring-pitch-500' : ''}`}
+    >
+      <div
+        className="w-full aspect-square rounded mb-2 flex items-center justify-center font-bold"
+        style={{ backgroundColor: primary, color: secondary }}
+      >
+        {shortName}
+      </div>
+      <div className="text-xs font-semibold truncate">{name}</div>
+      <div className="text-[10px] text-white/50">{tier.toUpperCase()}</div>
+    </button>
+  );
 
   return (
     <div className="min-h-screen p-6 max-w-4xl mx-auto">
@@ -49,25 +73,44 @@ export default function NewGamePage() {
         </label>
       </div>
 
+      {/* Times do Brasileirão */}
       <h3 className="display-font text-2xl mb-3">Escolha seu time</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-8">
-        {teamsPreview.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setSelectedTeam(t.id)}
-            className={`panel p-3 text-left transition-all hover:scale-[1.02] ${selectedTeam === t.id ? 'ring-2 ring-pitch-500' : ''}`}
-          >
-            <div
-              className="w-full aspect-square rounded mb-2 flex items-center justify-center font-bold"
-              style={{ backgroundColor: t.primaryColor, color: t.secondaryColor }}
-            >
-              {t.shortName}
-            </div>
-            <div className="text-xs font-semibold truncate">{t.name}</div>
-            <div className="text-[10px] text-white/50">{t.tier.toUpperCase()}</div>
-          </button>
-        ))}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-6">
+        {brTeamsPreview.map((t) =>
+          teamCard(t.id, t.shortName, t.name, t.tier, t.primaryColor, t.secondaryColor)
+        )}
       </div>
+
+      {/* Times customizados */}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="display-font text-2xl">Times Personalizados</h3>
+        <Link to="/custom-team" className="btn-ghost text-xs flex items-center gap-1">
+          <Pencil className="w-3 h-3" /> Gerenciar
+        </Link>
+      </div>
+
+      {customTeams.length === 0 ? (
+        <Link
+          to="/custom-team"
+          className="panel p-4 mb-8 flex items-center gap-3 text-white/50 hover:text-white transition-colors border border-dashed border-white/20"
+        >
+          <Plus className="w-5 h-5" />
+          <span className="text-sm">Criar seu próprio time para jogar no Brasileirão</span>
+        </Link>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-8">
+          {customTeams.map((t) =>
+            teamCard(t.id, t.shortName, t.name, t.tier, t.primaryColor, t.secondaryColor)
+          )}
+          <Link
+            to="/custom-team"
+            className="panel p-3 flex flex-col items-center justify-center text-white/40 hover:text-white transition-colors border-dashed border border-white/20 aspect-square"
+          >
+            <Plus className="w-6 h-6 mb-1" />
+            <span className="text-xs">Novo time</span>
+          </Link>
+        </div>
+      )}
 
       <button
         onClick={handleStart}
