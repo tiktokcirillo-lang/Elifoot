@@ -100,6 +100,14 @@ function pickFouler(team: Team, rng: () => number): Player | undefined {
 }
 
 // ============================================================
+// Helper de narração variada
+// ============================================================
+
+function pick<T>(rng: () => number, items: T[]): T {
+  return items[Math.floor(rng() * items.length)];
+}
+
+// ============================================================
 // Simulação principal minuto a minuto
 // ============================================================
 
@@ -206,7 +214,16 @@ export function simulateMatch(
           side: isHomeAttack ? 'away' : 'home',
           playerId: fouler.id,
           playerName: fouler.name,
-          description: `${fouler.name} recebe cartão ${isYellow ? 'amarelo' : 'vermelho'}.`,
+          description: pick(rng, isYellow ? [
+            `${fouler.name} recebe cartão amarelo.`,
+            `Árbitro sem hesitar: cartão amarelo para ${fouler.name}!`,
+            `${fouler.name} advertido. Cuidado!`,
+            `Falta dura de ${fouler.name}. Cartão amarelo!`,
+          ] : [
+            `${fouler.name} recebe cartão vermelho e deixa o time com um a menos!`,
+            `EXPULSO! ${fouler.name} vê o cartão vermelho e vai para o chuveiro!`,
+            `Cartão vermelho para ${fouler.name}. A equipe fica em desvantagem!`,
+          ]),
         });
       }
       continue;
@@ -217,7 +234,12 @@ export function simulateMatch(
         minute,
         type: 'corner',
         side: isHomeAttack ? 'home' : 'away',
-        description: `Escanteio para ${attacker.name}.`,
+        description: pick(rng, [
+          `Escanteio para o ${attacker.shortName}!`,
+          `Bola no fundo. ${attacker.shortName} vai cobrar o escanteio.`,
+          `${attacker.shortName} exige escanteio!`,
+          `Bandeirinha levantada. Escanteio para o ${attacker.shortName}.`,
+        ]),
       });
       // Pequena chance de escanteio virar gol
       if (rng() < 0.04) {
@@ -232,7 +254,12 @@ export function simulateMatch(
             side: isHomeAttack ? 'home' : 'away',
             playerId: scorer.id,
             playerName: scorer.name,
-            description: `GOL DO ${attacker.shortName}! ${scorer.name} cabeceia para o fundo das redes.`,
+            description: pick(rng, [
+              `GOL DO ${attacker.shortName.toUpperCase()}! ${scorer.name} cabeceia para o fundo das redes!`,
+              `GOOOOL! ${scorer.name} aproveitou o cruzamento e balançou as redes!`,
+              `Que cabeceio de ${scorer.name}! ${attacker.shortName} marca no escanteio!`,
+              `${scorer.name} sobe mais alto que todos e faz o gol do ${attacker.shortName}!`,
+            ]),
           });
         }
       }
@@ -264,7 +291,14 @@ export function simulateMatch(
           side: isHomeAttack ? 'home' : 'away',
           playerId: scorer.id,
           playerName: scorer.name,
-          description: `GOOOL! ${scorer.name} marca para o ${attacker.shortName}.`,
+          description: pick(rng, [
+            `GOOOL! ${scorer.name} marca para o ${attacker.shortName}!`,
+            `QUE GOLAÇO! ${scorer.name} deixa a torcida do ${attacker.shortName} em êxtase!`,
+            `${scorer.name.toUpperCase()}! A bola foi direto para o fundo das redes!`,
+            `GOL DE PLACA! ${scorer.name} não perdoa e assina pelo ${attacker.shortName}!`,
+            `IMPOSSÍVEL DEFENDER! ${scorer.name} finaliza com categoria para o ${attacker.shortName}!`,
+            `Finalizou no ângulo! ${scorer.name} faz mais um para o ${attacker.shortName}!`,
+          ]),
         });
       }
     } else if (isOnTarget) {
@@ -272,14 +306,26 @@ export function simulateMatch(
         minute,
         type: 'shot_on_target',
         side: isHomeAttack ? 'home' : 'away',
-        description: `Defesaça do goleiro do ${defender.shortName}.`,
+        description: pick(rng, [
+          `Defesaça do goleiro do ${defender.shortName}!`,
+          `Incrível! O arqueiro do ${defender.shortName} espalma com categoria!`,
+          `Que reflexo! O goleiro do ${defender.shortName} salva mais uma!`,
+          `${attacker.shortName} quase marca! O goleiro do ${defender.shortName} estava lá!`,
+          `Uuuuh! Bateu forte mas o goleiro do ${defender.shortName} estava bem posicionado.`,
+        ]),
       });
     } else {
       events.push({
         minute,
         type: 'shot_off_target',
         side: isHomeAttack ? 'home' : 'away',
-        description: `Finalização para fora.`,
+        description: pick(rng, [
+          `Finalização para fora.`,
+          `${attacker.shortName} perde boa chance! A bola passa por cima do travessão.`,
+          `Chute sem direção — o goleiro do ${defender.shortName} não precisou se esforçar.`,
+          `Sem capricho! O jogador do ${attacker.shortName} mandou longe do gol.`,
+          `Tentou de fora da área, mas a bola foi para a arquibancada.`,
+        ]),
       });
     }
   }

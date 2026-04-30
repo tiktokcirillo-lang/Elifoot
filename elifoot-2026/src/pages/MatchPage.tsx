@@ -84,8 +84,14 @@ export default function MatchPage() {
       if (newEvents.length) {
         const latest = newEvents[0];
         setLatestEvent(latest);
-        if (latest.type === 'goal' || latest.type === 'penalty_scored') soundEngine.play('goal');
-        else if (latest.type === 'yellow_card' || latest.type === 'red_card') soundEngine.play('card');
+        if (latest.type === 'goal' || latest.type === 'penalty_scored') {
+          soundEngine.play('goal');
+          soundEngine.play('crowd_goal');
+        } else if (latest.type === 'yellow_card' || latest.type === 'red_card') {
+          soundEngine.play('card');
+        } else if (latest.type === 'shot_on_target') {
+          soundEngine.play('crowd_oooh');
+        }
         setDisplayedEvents((prev) => [...newEvents, ...prev]);
       }
       setCurrentMinute((m) => m + 1);

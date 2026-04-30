@@ -1,4 +1,4 @@
-type SoundType = 'whistle' | 'whistle_end' | 'goal' | 'card';
+type SoundType = 'whistle' | 'whistle_end' | 'goal' | 'card' | 'crowd_goal' | 'crowd_oooh';
 
 class SoundEngine {
   private _ctx: AudioContext | null = null;
@@ -93,6 +93,68 @@ class SoundEngine {
     this.playTone(ctx, 'square', 300, now, 0.25, 0.3);
   }
 
+  private makeNoise(ctx: AudioContext, duration: number): AudioBufferSourceNode {
+    const bufferSize = Math.ceil(ctx.sampleRate * duration);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    return source;
+  }
+
+  private playCrowdGoal(): void {
+    const ctx = this.ctx();
+    const now = ctx.currentTime;
+    const duration = 2.8;
+
+    const noise = this.makeNoise(ctx, duration);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 900;
+    filter.Q.value = 0.4;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.12);
+    gain.gain.setValueAtTime(0.22, now + 1.4);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now + duration);
+  }
+
+  private playCrowdOooh(): void {
+    const ctx = this.ctx();
+    const now = ctx.currentTime;
+    const duration = 0.75;
+
+    const noise = this.makeNoise(ctx, duration);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 650;
+    filter.Q.value = 0.9;
+    filter.frequency.linearRampToValueAtTime(400, now + duration);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.13, now + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now + duration);
+  }
+
   play(type: SoundType): void {
     if (!this._enabled) return;
 
@@ -109,6 +171,12 @@ class SoundEngine {
           break;
         case 'card':
           this.playCard();
+          break;
+        case 'crowd_goal':
+          this.playCrowdGoal();
+          break;
+        case 'crowd_oooh':
+          this.playCrowdOooh();
           break;
       }
     } catch (e) {
