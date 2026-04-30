@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: radial-gradient(ellipse at top, #141c40 0%, #050816 60%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl bg-midnight-800/70 backdrop-blur border border-white/5 shadow-xl;
+  }
+  .btn {
+    @apply px-4 py-2 rounded-lg font-semibold transition-colors;
+  }
+  .btn-primary {
+    @apply btn bg-pitch-500 hover:bg-pitch-700 text-white;
+  }
+  .btn-ghost {
+    @apply btn bg-white/5 hover:bg-white/10 text-white border border-white/10;
+  }
+  .btn-gold {
+    @apply btn bg-gold-500 hover:bg-gold-600 text-midnight-950;
+  }
+  .display-font {
+    font-family: 'Bebas Neue', system-ui, sans-serif;
+    letter-spacing: 0.02em;
+  }
+}
