@@ -1,6 +1,7 @@
 import { useGameStore } from '@/store/gameStore';
 import type { TrainingIntensity, TrainingType } from '@/types';
 import { Dumbbell, Zap, Shield, Wind, Brain, Bed, ChevronRight } from 'lucide-react';
+import { calcWeeklyGrowth } from '@/engine/trainingEngine';
 
 const TRAINING_TYPES: { type: TrainingType; label: string; desc: string; icon: React.ReactNode }[] = [
   { type: 'attack',    label: 'Ataque',     desc: '+Ataque para atacantes e meias',       icon: <Zap className="w-5 h-5" /> },
@@ -101,7 +102,7 @@ export default function TrainingPage() {
                 <th className="text-center py-2">TEC</th>
                 <th className="text-center py-2">FIS</th>
                 <th className="text-center py-2">Físico</th>
-                <th className="text-center py-2">Pot.</th>
+                <th className="text-center py-2">Cresc.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -109,8 +110,12 @@ export default function TrainingPage() {
                 .slice()
                 .sort((a, b) => b.overall - a.overall)
                 .map((p) => {
-                  const growth = growthBadge(p.age);
+                  const weeklyGain = calcWeeklyGrowth(p, plan);
                   const isInjured = p.injuredUntil && p.injuredUntil > save.currentTurn;
+                  const gainColor =
+                    weeklyGain >= 1.5 ? 'text-green-400' :
+                    weeklyGain >= 0.5 ? 'text-yellow-400' :
+                    'text-white/30';
                   return (
                     <tr key={p.id} className={isInjured ? 'opacity-40' : ''}>
                       <td className="py-2 pr-2">
@@ -141,7 +146,11 @@ export default function TrainingPage() {
                         <div className="text-xs text-white/40 mt-0.5">{p.fitness}%</div>
                       </td>
                       <td className="text-center py-2">
-                        <span className={`text-xs font-semibold ${growth.color}`}>{growth.label}</span>
+                        {weeklyGain > 0 ? (
+                          <span className={`text-xs font-semibold ${gainColor}`}>+{weeklyGain.toFixed(1)}</span>
+                        ) : (
+                          <span className="text-xs text-white/20">—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -153,21 +162,13 @@ export default function TrainingPage() {
 
       {/* Legenda */}
       <div className="panel p-4 text-xs text-white/50 flex flex-wrap gap-4">
-        <span>Pot. = potencial de crescimento semanal com o treino atual</span>
-        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-green-400" /> Alto (&lt;22 anos)</span>
-        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-yellow-400" /> Médio (22-26)</span>
-        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-white/40" /> Baixo (&gt;26)</span>
+        <span>Cresc. = ganho estimado de OVR por semana com o plano atual</span>
+        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-green-400" /> ≥ +1.5 (jovem)</span>
+        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-yellow-400" /> ≥ +0.5 (médio)</span>
+        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-white/40" /> — (veterano/sem ganho)</span>
       </div>
     </div>
   );
-}
-
-function growthBadge(age: number): { label: string; color: string } {
-  if (age < 19) return { label: '★★★', color: 'text-green-400' };
-  if (age < 22) return { label: '★★☆', color: 'text-green-400' };
-  if (age < 26) return { label: '★☆☆', color: 'text-yellow-400' };
-  if (age < 30) return { label: '—', color: 'text-white/40' };
-  return { label: '—', color: 'text-white/20' };
 }
 
 function posColor(pos: string): string {

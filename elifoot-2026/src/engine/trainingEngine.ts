@@ -81,6 +81,32 @@ function recalcOverall(p: Player): number {
   );
 }
 
+// Pesos de atributos por posição (iguais ao recalcOverall)
+const POSITION_WEIGHTS: Record<string, Record<string, number>> = {
+  GK: { attack: 0.05, defense: 0.40, pace: 0.10, technique: 0.30, stamina: 0.15 },
+  DF: { attack: 0.10, defense: 0.40, pace: 0.15, technique: 0.15, stamina: 0.20 },
+  MF: { attack: 0.20, defense: 0.20, pace: 0.15, technique: 0.30, stamina: 0.15 },
+  FW: { attack: 0.40, defense: 0.10, pace: 0.20, technique: 0.20, stamina: 0.10 },
+};
+
+/** Retorna a estimativa de ganho semanal de OVR para o jogador com o plano atual. */
+export function calcWeeklyGrowth(player: Player, plan: TrainingPlan): number {
+  const effect = EFFECTS[plan.type];
+  const statMult = INTENSITY_MULT[plan.intensity];
+  const growth = growthMultiplier(player.age);
+  if (growth === 0) return 0;
+
+  const w = POSITION_WEIGHTS[player.position] ?? POSITION_WEIGHTS['MF'];
+  const rawGain =
+    effect.attack    * w.attack +
+    effect.defense   * w.defense +
+    effect.pace      * w.pace +
+    effect.technique * w.technique +
+    effect.stamina   * w.stamina;
+
+  return Math.round(rawGain * statMult * growth * 10) / 10;
+}
+
 export function applyWeeklyTraining(
   team: Team,
   plan: TrainingPlan,

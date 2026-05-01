@@ -382,25 +382,30 @@ function processAITransfers(save: SaveGame): void {
   // A cada 7 turnos: times de IA listam jogadores para venda
   if (save.currentTurn % 7 === 0) {
     const aiTeams = save.teams.filter((t) => !t.isUserControlled);
-    const candidates = aiTeams.filter(() => rng() < 0.12); // ~12% dos times por semana
 
-    candidates.forEach((team) => {
-      // Lista um jogador aleatório que não esteja já listado
+    aiTeams.forEach((team) => {
+      if (rng() >= 0.18) return; // 18% de chance por semana (era 12%)
+
       const listed = market
         .filter((l) => l.fromTeamId === team.id && l.status === 'open')
         .map((l) => l.playerId);
+
+      // Times com elenco grande listam a partir do 3º melhor; outros a partir do 4º
+      const keepTop = team.squad.length > 24 ? 3 : 4;
       const available = team.squad
         .filter((p) => !listed.includes(p.id))
         .sort((a, b) => b.overall - a.overall)
-        .slice(3); // nunca lista os 3 melhores
+        .slice(keepTop);
+
       if (available.length === 0) return;
 
-      const player = available[Math.floor(rng() * available.length)];
+      // Escolhe aleatoriamente entre os até 6 primeiros disponíveis
+      const pick = available[Math.floor(rng() * Math.min(available.length, 6))];
       market.push({
         id: nanoid(8),
-        playerId: player.id,
+        playerId: pick.id,
         fromTeamId: team.id,
-        askingPrice: Math.round(player.marketValue * (0.9 + rng() * 0.4)),
+        askingPrice: Math.round(pick.marketValue * (0.85 + rng() * 0.35)),
         turn: save.currentTurn,
         status: 'open',
         bids: [],
@@ -411,14 +416,19 @@ function processAITransfers(save: SaveGame): void {
   // Times de IA fazem ofertas em listagens abertas
   const openListings = market.filter((l) => l.status === 'open' && l.fromTeamId !== save.controlledTeamId);
   openListings.forEach((listing) => {
-    if (rng() > 0.08) return; // 8% de chance por turno por listagem
-    const biddingTeam = save.teams
-      .filter((t) => !t.isUserControlled && t.id !== listing.fromTeamId)
-      .find(() => rng() < 0.2);
-    if (!biddingTeam) return;
-    if (biddingTeam.budget < listing.askingPrice * 0.7) return;
+    if (rng() > 0.18) return; // 18% de chance por turno (era 8%)
 
-    const amount = Math.round(listing.askingPrice * (0.8 + rng() * 0.3));
+    const aiCandidates = save.teams.filter(
+      (t) => !t.isUserControlled && t.id !== listing.fromTeamId,
+    );
+    const biddingTeam = aiCandidates.find(() => rng() < 0.25);
+    if (!biddingTeam) return;
+
+    // Times com elenco curto pagam mais para fechar logo
+    const needBonus = biddingTeam.squad.length < 20 ? 1.1 : 1.0;
+    const amount = Math.round(listing.askingPrice * (0.85 + rng() * 0.3) * needBonus);
+
+    if (biddingTeam.budget < amount * 0.75) return;
     if (listing.bids.some((b) => b.fromTeamId === biddingTeam.id)) return;
 
     listing.bids.push({
@@ -430,21 +440,21 @@ function processAITransfers(save: SaveGame): void {
     });
   });
 
-  // IA aceita automaticamente ofertas >= preço pedido nas suas listagens
+  // IA aceita automaticamente ofertas >= 90% do preço pedido (era 100%)
   market
     .filter((l) => l.status === 'open' && l.fromTeamId !== save.controlledTeamId)
     .forEach((listing) => {
+      const threshold = listing.askingPrice * 0.9;
       const best = listing.bids
-        .filter((b) => b.status === 'pending' && b.amount >= listing.askingPrice)
+        .filter((b) => b.status === 'pending' && b.amount >= threshold)
         .sort((a, b) => b.amount - a.amount)[0];
       if (!best) return;
-
       executeTransfer(listing, best, save);
     });
 
-  // Remover listagens antigas (> 60 turnos)
+  // Remover listagens antigas (> 56 turnos = 8 semanas)
   save.transferMarket = market.filter(
-    (l) => l.status !== 'open' || save.currentTurn - l.turn <= 60,
+    (l) => l.status !== 'open' || save.currentTurn - l.turn <= 56,
   );
 }
 
