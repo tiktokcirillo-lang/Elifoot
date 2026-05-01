@@ -208,9 +208,19 @@ export function startNewSeason(save: SaveGame): void {
 
   // ── Limpar mercado e histórico financeiro ─────────────────
   save.transferMarket = save.transferMarket.filter((l) => l.status !== 'open');
-  // Mantém apenas o histórico do mês passado
   const keepFrom = Math.max(0, save.currentTurn - 30);
   save.financeHistory = save.financeHistory.filter((r) => r.turn >= keepFrom);
+
+  // ── Expirar ofertas de patrocínio da temporada anterior ───
+  if (save.sponsorOffers) {
+    save.sponsorOffers = save.sponsorOffers.map((o) => {
+      if (o.status === 'pending') return { ...o, status: 'expired' as const };
+      if (o.status === 'active' && o.activeUntil != null && o.activeUntil < save.season) {
+        return { ...o, status: 'expired' as const };
+      }
+      return o;
+    });
+  }
 
   // ── Nova safra da base ────────────────────────────────────
   save.youthPlayers = [

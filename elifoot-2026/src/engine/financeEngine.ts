@@ -78,17 +78,26 @@ export function processTicketRevenue(
 // Finanças semanais — chamada a cada 7 turnos
 // ============================================================
 
+const SEASON_WEEKS = 40; // 280 turnos / 7 = 40 semanas por temporada
+
 export function processWeeklyFinances(save: SaveGame): void {
   const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
   if (!userTeam) return;
 
   // 1. Receita de patrocínio primário
-  const sponsorIncome = Math.round(userTeam.reputation * 28);
+  const activeDeal = save.sponsorOffers?.find(
+    (o) => o.status === 'active' && o.activeUntil != null && o.activeUntil >= save.season,
+  );
+  const sponsorIncome = activeDeal
+    ? Math.round(activeDeal.valuePerSeason / SEASON_WEEKS)
+    : Math.round(userTeam.reputation * 20);
   userTeam.budget += sponsorIncome;
   addRecord(save, {
     type: 'sponsor',
     amount: sponsorIncome,
-    description: `Receita de patrocinadores (Semana)`,
+    description: activeDeal
+      ? `Patrocínio ${activeDeal.brandName} (Semana)`
+      : `Receita de patrocinadores (Semana)`,
   });
 
   // 2. Direitos de TV
@@ -147,7 +156,12 @@ export function calcWeeklyCashflow(save: SaveGame): WeeklyCashflow {
   const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
   if (!userTeam) return { sponsorIncome: 0, tvIncome: 0, weeklyWages: 0, projectedTickets: 0, net: 0 };
 
-  const sponsorIncome = Math.round(userTeam.reputation * 28);
+  const activeDeal = save.sponsorOffers?.find(
+    (o) => o.status === 'active' && o.activeUntil != null && o.activeUntil >= save.season,
+  );
+  const sponsorIncome = activeDeal
+    ? Math.round(activeDeal.valuePerSeason / SEASON_WEEKS)
+    : Math.round(userTeam.reputation * 20);
   const tvIncome = TV_RIGHTS_WEEKLY[userTeam.tier];
   const weeklyWages = Math.round(userTeam.squad.reduce((s, p) => s + p.wageMonthly, 0) / 4);
   const avgAttendance = 0.65 + (userTeam.reputation / 100) * 0.25;

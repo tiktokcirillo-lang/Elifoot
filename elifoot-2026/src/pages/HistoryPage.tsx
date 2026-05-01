@@ -1,22 +1,64 @@
 import { useGameStore } from '@/store/gameStore';
-import { Trophy, TrendingUp, TrendingDown } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, AlertTriangle, LogOut } from 'lucide-react';
+import type { Team } from '@/types';
 
 export default function HistoryPage() {
   const save = useGameStore((s) => s.save);
+  const switchTeam = useGameStore((s) => s.switchTeam);
+  const resignFromClub = useGameStore((s) => s.resignFromClub);
+
   if (!save) return null;
 
   const records = [...save.seasonRecords].reverse();
   const hallOfFame = save.hallOfFame;
+  const dismissed = save.dismissed;
+
+  // Times disponíveis para assumir (ordenados por reputação)
+  const availableTeams = [...save.teams]
+    .filter((t) => !t.isUserControlled && t.country === 'BR')
+    .sort((a, b) => b.reputation - a.reputation);
 
   return (
     <div className="space-y-4">
       <div className="panel p-5">
-        <div className="text-xs uppercase tracking-wider text-white/50">Fase 7</div>
+        <div className="text-xs uppercase tracking-wider text-white/50">Carreira</div>
         <h2 className="display-font text-3xl">Histórico</h2>
         <div className="text-sm text-white/60">
           {records.length} temporada(s) registrada(s)
         </div>
       </div>
+
+      {/* Demissão / escolha de novo clube */}
+      {dismissed && (
+        <div className="panel p-5 border border-red-500/30">
+          <div className="flex items-center gap-3 mb-4">
+            <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <div>
+              <div className="font-semibold text-red-300">
+                {save.managerWarnings >= 2 ? 'Você foi demitido' : 'Você pediu demissão'}
+              </div>
+              <div className="text-sm text-white/50">Escolha um clube para continuar sua carreira</div>
+            </div>
+          </div>
+          <TeamPicker teams={availableTeams} onPick={switchTeam} />
+        </div>
+      )}
+
+      {/* Resignação voluntária (fim de temporada) */}
+      {!dismissed && save.seasonOver && (
+        <div className="panel p-4 flex items-center justify-between">
+          <div>
+            <div className="font-semibold text-sm">Mudar de clube</div>
+            <div className="text-xs text-white/50">Temporada encerrada — você pode assumir outro time</div>
+          </div>
+          <button
+            className="flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 text-white/70 px-3 py-2 rounded-lg transition-colors"
+            onClick={resignFromClub}
+          >
+            <LogOut className="w-3.5 h-3.5" /> Pedir demissão
+          </button>
+        </div>
+      )}
 
       {/* Hall da fama */}
       {hallOfFame.length > 0 && (
@@ -94,6 +136,40 @@ export default function HistoryPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function TeamPicker({ teams, onPick }: { teams: Team[]; onPick: (id: string) => void }) {
+  const tierLabel: Record<string, string> = {
+    elite: 'Elite',
+    top: 'Primeira linha',
+    mid: 'Média',
+    low: 'Baixa',
+  };
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {teams.slice(0, 16).map((team) => (
+        <button
+          key={team.id}
+          className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-left"
+          onClick={() => onPick(team.id)}
+        >
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+            style={{ backgroundColor: team.primaryColor, color: team.secondaryColor }}
+          >
+            {team.shortName}
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-sm truncate">{team.name}</div>
+            <div className="text-xs text-white/40">
+              {team.city} · {tierLabel[team.tier]} · Rep {team.reputation}
+            </div>
+          </div>
+        </button>
+      ))}
     </div>
   );
 }

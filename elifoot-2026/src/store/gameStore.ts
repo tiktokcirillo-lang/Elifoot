@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import type {
   SaveGame,
+  SponsorOffer,
   Team,
   Competition,
   CompetitionStanding,
@@ -14,6 +15,7 @@ import type {
   TransferBid,
   Formation,
 } from '@/types';
+import { SPONSOR_BRANDS } from '@/data/sponsors';
 import { simulateMatch, simulatePenaltyShootout } from '@/engine/matchSimulator';
 import {
   createBrasileirao,
@@ -82,6 +84,14 @@ interface GameState {
 
   // Temporada
   startNewSeason: () => Promise<void>;
+
+  // Patrocínios
+  acceptSponsorOffer: (offerId: string) => void;
+  rejectSponsorOffer: (offerId: string) => void;
+
+  // Carreira
+  switchTeam: (teamId: string) => void;
+  resignFromClub: () => void;
 
   // Leitura
   getUserTeam: () => Team | undefined;
@@ -438,6 +448,43 @@ function processAITransfers(save: SaveGame): void {
   );
 }
 
+function generateSponsorOffer(save: SaveGame): void {
+  const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+  if (!userTeam) return;
+
+  const eligible = SPONSOR_BRANDS.filter((b) => userTeam.reputation >= b.minReputation);
+  if (eligible.length === 0) return;
+
+  const pendingBrandIds = new Set(
+    save.sponsorOffers.filter((o) => o.status === 'pending').map((o) => o.brandId),
+  );
+  const candidates = eligible.filter((b) => !pendingBrandIds.has(b.id));
+  if (candidates.length === 0) return;
+
+  const brand = candidates[Math.floor(Math.random() * candidates.length)];
+  const repRatio = Math.min(1, userTeam.reputation / 100);
+  const value = Math.round(brand.maxDealPerSeason * repRatio * (0.7 + Math.random() * 0.35));
+  const seasons = 1 + Math.floor(Math.random() * 3);
+
+  const offer: SponsorOffer = {
+    id: nanoid(8),
+    brandId: brand.id,
+    brandName: brand.name,
+    valuePerSeason: value,
+    seasons,
+    offeredAt: save.currentTurn,
+    expiresAt: save.currentTurn + 28,
+    status: 'pending',
+  };
+
+  save.sponsorOffers.push(offer);
+  pushNews(save, {
+    type: 'finance',
+    title: `Proposta de patrocínio: ${brand.name}`,
+    body: `${brand.name} oferece R$ ${(value / 1000).toFixed(1)}M/temporada por ${seasons} temporada(s). Válida por 28 dias — acesse Patrocínios.`,
+  });
+}
+
 function executeTransfer(listing: TransferListing, bid: TransferBid, save: SaveGame) {
   const seller = save.teams.find((t) => t.id === listing.fromTeamId);
   const buyer = save.teams.find((t) => t.id === bid.fromTeamId);
@@ -544,6 +591,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         generateYouthPlayer(2026 * 300 + 3, 2026),
       ],
       managerWarnings: 0,
+      sponsorOffers: [],
     };
 
     pushNews(save, {
@@ -577,6 +625,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         generateYouthPlayer(loaded.season * 300 + 3, loaded.season),
       ];
       if (loaded.managerWarnings === undefined) loaded.managerWarnings = 0;
+      if (!loaded.sponsorOffers)             loaded.sponsorOffers   = [];
       set({ save: loaded });
     }
   },
@@ -716,6 +765,21 @@ export const useGameStore = create<GameState>((set, get) => ({
           });
         }
       }
+    }
+
+    // Expirar ofertas de patrocínio pendentes
+    save.sponsorOffers = save.sponsorOffers.map((o) =>
+      o.status === 'pending' && o.expiresAt < save.currentTurn
+        ? { ...o, status: 'expired' as const }
+        : o,
+    );
+
+    // Gerar novas ofertas de patrocínio (turn 14 no início, depois a cada 35 turnos)
+    if (
+      !save.dismissed &&
+      (save.currentTurn === 14 || (save.currentTurn > 14 && save.currentTurn % 35 === 0))
+    ) {
+      generateSponsorOffer(save);
     }
 
     // Mercado de transferências
@@ -1156,6 +1220,87 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
 
     await persistSave(save);
+    set({ save });
+  },
+
+  // ── Patrocínios ───────────────────────────────────────────
+
+  acceptSponsorOffer(offerId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const offer = save.sponsorOffers.find((o) => o.id === offerId);
+    if (!offer || offer.status !== 'pending') return;
+
+    // Encerra deal ativo anterior
+    save.sponsorOffers
+      .filter((o) => o.status === 'active')
+      .forEach((o) => { o.status = 'expired'; });
+
+    offer.status = 'active';
+    offer.activeSince = save.season;
+    offer.activeUntil = save.season + offer.seasons - 1;
+
+    pushNews(save, {
+      type: 'finance',
+      title: `Contrato firmado: ${offer.brandName}`,
+      body: `Patrocínio de R$ ${(offer.valuePerSeason / 1000).toFixed(1)}M/temporada — até a temporada ${offer.activeUntil}.`,
+    });
+
+    set({ save });
+  },
+
+  rejectSponsorOffer(offerId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const offer = save.sponsorOffers.find((o) => o.id === offerId);
+    if (!offer || offer.status !== 'pending') return;
+    offer.status = 'rejected';
+    set({ save });
+  },
+
+  // ── Carreira ──────────────────────────────────────────────
+
+  switchTeam(teamId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const newTeam = save.teams.find((t) => t.id === teamId);
+    if (!newTeam) return;
+
+    const oldTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (oldTeam) oldTeam.isUserControlled = false;
+
+    newTeam.isUserControlled = true;
+    save.controlledTeamId = teamId;
+    save.dismissed = false;
+    save.managerWarnings = 0;
+    save.boardObjectives = generateBoardObjectives(newTeam);
+    // Deais de patrocínio ficam com o clube anterior
+    save.sponsorOffers = save.sponsorOffers
+      .map((o) => o.status === 'active' ? { ...o, status: 'expired' as const } : o)
+      .filter((o) => o.status !== 'pending');
+
+    pushNews(save, {
+      type: 'general',
+      title: `Você assume o ${newTeam.name}`,
+      body: `Nova missão: ${newTeam.name}. Boa sorte, ${save.managerName}!`,
+    });
+
+    set({ save });
+  },
+
+  resignFromClub() {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    save.dismissed = true;
+    pushNews(save, {
+      type: 'general',
+      title: 'Você pediu demissão',
+      body: 'Acesse Histórico para escolher um novo clube.',
+    });
     set({ save });
   },
 

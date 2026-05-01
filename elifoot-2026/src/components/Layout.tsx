@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { Home, Trophy, Users, Calendar, LogOut, Save, ArrowRightLeft, Dumbbell, DollarSign, Shield, History, Volume2, VolumeX } from 'lucide-react';
+import { Home, Trophy, Users, Calendar, LogOut, Save, ArrowRightLeft, Dumbbell, DollarSign, Shield, History, Volume2, VolumeX, Handshake } from 'lucide-react';
 import clsx from 'clsx';
 import { useI18nStore, useT, type Lang } from '@/i18n';
 import { soundEngine } from '@/engine/soundEngine';
@@ -96,6 +96,7 @@ export default function Layout() {
           <NavItem to="/game/training" icon={<Dumbbell className="w-4 h-4" />}>{t('nav_training')}</NavItem>
           <NavItem to="/game/finance" icon={<DollarSign className="w-4 h-4" />}>{t('nav_finance')}</NavItem>
           <NavItem to="/game/tactics" icon={<Shield className="w-4 h-4" />}>{t('nav_tactics')}</NavItem>
+          <NavItem to="/game/sponsors" icon={<Handshake className="w-4 h-4" />}>Patrocínios</NavItem>
           <NavItem to="/game/history" icon={<History className="w-4 h-4" />}>{t('nav_history')}</NavItem>
           <div className="px-3 pt-3 pb-1 text-xs uppercase tracking-wider text-white/30">{t('nav_competitions')}</div>
           {save.competitions.map((c) => (

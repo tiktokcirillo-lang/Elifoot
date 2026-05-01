@@ -111,6 +111,23 @@ export interface HallOfFameEntry {
   championName: string;
 }
 
+// ============================================================
+// Patrocinadores
+// ============================================================
+
+export interface SponsorOffer {
+  id: string;
+  brandId: string;
+  brandName: string;
+  valuePerSeason: number; // em milhares por temporada
+  seasons: number; // duração do contrato em temporadas
+  offeredAt: number; // turno da oferta
+  expiresAt: number; // turno de expiração da oferta pendente
+  status: 'pending' | 'active' | 'expired' | 'rejected';
+  activeSince?: number; // temporada de início
+  activeUntil?: number; // última temporada do contrato (inclusivo)
+}
+
 export type Foot = 'L' | 'R' | 'B';
 
 export interface Player {
@@ -326,4 +343,6 @@ export interface SaveGame {
   // Estabilidade do técnico
   managerWarnings: number; // avisos consecutivos por falha em objetivos críticos
   dismissed?: boolean;
+  // Patrocínios
+  sponsorOffers: SponsorOffer[];
 }
