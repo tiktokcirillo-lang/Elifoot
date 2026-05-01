@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import type { MatchEvent, MatchResult, TacticalPosture, PressingLevel } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ArrowRightLeft } from 'lucide-react';
+import { ChevronRight, ArrowRightLeft, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import MatchField from '@/components/MatchField';
 import { soundEngine } from '@/engine/soundEngine';
+import { narratorEngine } from '@/engine/narratorEngine';
 
 type Phase = 'prematch' | 'playing' | 'halftime' | 'finished';
 
@@ -32,6 +33,8 @@ export default function MatchPage() {
   const [phase, setPhase] = useState<Phase>('prematch');
   const [result, setResult] = useState<MatchResult | null>(null);
   const [firstHalfResult, setFirstHalfResult] = useState<MatchResult | null>(null);
+  const [soundOn, setSoundOn] = useState(soundEngine.enabled);
+  const [narratorOn, setNarratorOn] = useState(narratorEngine.enabled);
   const [displayedEvents, setDisplayedEvents] = useState<MatchEvent[]>([]);
   const [currentMinute, setCurrentMinute] = useState(0);
   const [running, setRunning] = useState(false);
@@ -67,6 +70,7 @@ export default function MatchPage() {
     // Pausa no intervalo
     if (currentMinute === 45) {
       soundEngine.play('whistle');
+      narratorEngine.cancel();
       setRunning(false);
       setPhase('halftime');
       return;
@@ -74,6 +78,7 @@ export default function MatchPage() {
 
     if (currentMinute >= 90) {
       soundEngine.play('whistle_end');
+      narratorEngine.cancel();
       setRunning(false);
       setPhase('finished');
       return;
@@ -86,14 +91,23 @@ export default function MatchPage() {
         const goalEvent = newEvents.find((e) => e.type === 'goal' || e.type === 'penalty_scored');
         const latest = goalEvent ?? newEvents[0];
         setLatestEvent(latest);
+
         if (latest.type === 'goal' || latest.type === 'penalty_scored') {
           soundEngine.play('goal');
           soundEngine.play('crowd_goal');
+          // Gol: interrompe qualquer narração e fala com empolgação
+          narratorEngine.speak(latest.description, { interrupt: true, rate: 1.0, pitch: 1.25 });
         } else if (latest.type === 'yellow_card' || latest.type === 'red_card') {
           soundEngine.play('card');
+          narratorEngine.speakIfFree(latest.description, { rate: 1.1, pitch: 0.95 });
         } else if (latest.type === 'shot_on_target') {
           soundEngine.play('crowd_oooh');
+          narratorEngine.speakIfFree(latest.description, { rate: 1.25, pitch: 1.0 });
+        } else if (latest.type === 'corner') {
+          narratorEngine.speakIfFree(latest.description, { rate: 1.3, pitch: 1.05 });
         }
+        // shot_off_target: sem narração para não sobrecarregar
+
         setDisplayedEvents((prev) => [...newEvents, ...prev]);
       }
       setCurrentMinute((m) => m + 1);
@@ -206,6 +220,26 @@ export default function MatchPage() {
             </div>
           )}
 
+          {/* Controles de som e narrador */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setSoundOn(soundEngine.toggle())}
+              title={soundOn ? 'Desligar sons' : 'Ligar sons'}
+              className="flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
+            >
+              {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-white/30" />}
+              Sons {soundOn ? 'ligados' : 'desligados'}
+            </button>
+            <button
+              onClick={() => setNarratorOn(narratorEngine.toggle())}
+              title={narratorOn ? 'Desligar narrador' : 'Ligar narrador'}
+              className="flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
+            >
+              {narratorOn ? <Mic className="w-4 h-4 text-pitch-400" /> : <MicOff className="w-4 h-4 text-white/30" />}
+              Narrador {narratorOn ? 'ligado' : 'desligado'}
+            </button>
+          </div>
+
           <button onClick={startMatch} className="btn-primary w-full flex items-center justify-center gap-2 text-lg py-3">
             Iniciar Partida <ChevronRight className="w-5 h-5" />
           </button>
@@ -313,8 +347,26 @@ export default function MatchPage() {
   return (
     <div className="space-y-4 max-w-3xl mx-auto">
       <div className="panel p-6">
-        <div className="text-center text-xs uppercase tracking-wider text-white/50 mb-3">
-          {comp?.shortName} · Rodada {fixture.round}
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs uppercase tracking-wider text-white/50">
+            {comp?.shortName} · Rodada {fixture.round}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSoundOn(soundEngine.toggle())}
+              title={soundOn ? 'Desligar sons' : 'Ligar sons'}
+              className="p-1.5 rounded text-white/40 hover:text-white/70 transition-colors"
+            >
+              {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => setNarratorOn(narratorEngine.toggle())}
+              title={narratorOn ? 'Desligar narrador' : 'Ligar narrador'}
+              className="p-1.5 rounded text-white/40 hover:text-white/70 transition-colors"
+            >
+              {narratorOn ? <Mic className="w-4 h-4 text-pitch-400" /> : <MicOff className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
         <div className="flex items-center justify-around mb-4">
           <TeamBadge name={home.name} shortName={home.shortName} bg={home.primaryColor} fg={home.secondaryColor} />
