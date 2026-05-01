@@ -230,19 +230,24 @@ export function simulateMatch(
     }
 
     if (eventType === 'corner') {
+      // 1) Narração do escanteio cobrado
       events.push({
         minute,
         type: 'corner',
         side: isHomeAttack ? 'home' : 'away',
         description: pick(rng, [
-          `Escanteio para o ${attacker.shortName}!`,
-          `Bola no fundo. ${attacker.shortName} vai cobrar o escanteio.`,
-          `${attacker.shortName} exige escanteio!`,
-          `Bandeirinha levantada. Escanteio para o ${attacker.shortName}.`,
+          `Escanteio para o ${attacker.shortName}! A bola vai cruzada na área...`,
+          `${attacker.shortName} cobra escanteio! Há movimentação na área adversária!`,
+          `Bola parada! O ${attacker.shortName} vai cobrar o escanteio com perigo.`,
+          `Escanteio cobrado! Os jogadores brigam pela bola dentro da área do ${defender.shortName}!`,
+          `${attacker.shortName} exige escanteio. A bola vai para dentro da área...`,
         ]),
       });
-      // Pequena chance de escanteio virar gol
-      if (rng() < 0.04) {
+
+      // 2) Resultado do escanteio: 5% gol, 12% chute no alvo, resto sem perigo
+      const cornerRoll = rng();
+      if (cornerRoll < 0.05) {
+        // Gol de cabeça / bola de área
         const scorer = pickScorer(attacker, rng);
         if (scorer) {
           if (isHomeAttack) homeGoals++; else awayGoals++;
@@ -255,13 +260,29 @@ export function simulateMatch(
             playerId: scorer.id,
             playerName: scorer.name,
             description: pick(rng, [
-              `GOL DO ${attacker.shortName.toUpperCase()}! ${scorer.name} cabeceia para o fundo das redes!`,
-              `GOOOOL! ${scorer.name} aproveitou o cruzamento e balançou as redes!`,
-              `Que cabeceio de ${scorer.name}! ${attacker.shortName} marca no escanteio!`,
-              `${scorer.name} sobe mais alto que todos e faz o gol do ${attacker.shortName}!`,
+              `GOOOOOL! Cabeceio certeiro de ${scorer.name} para o ${attacker.shortName}!`,
+              `É GOL DE CABEÇA! ${scorer.name} soube se posicionar e empurrou para as redes!`,
+              `GOOOOOL DO ${attacker.shortName.toUpperCase()}! ${scorer.name} subiu mais alto que a defesa e não perdoou!`,
+              `Que golaço de cabeça! ${scorer.name} faz o ${attacker.shortName} vibrar na cobrança de escanteio!`,
+              `${scorer.name.toUpperCase()}! Aproveitou o escanteio para fazer um gol de placa!`,
             ]),
           });
         }
+      } else if (cornerRoll < 0.17) {
+        // Escanteio perigoso — chute no alvo, goleiro defende
+        if (isHomeAttack) homeShots++; else awayShots++;
+        if (isHomeAttack) homeShotsOnTarget++; else awayShotsOnTarget++;
+        events.push({
+          minute,
+          type: 'shot_on_target',
+          side: isHomeAttack ? 'home' : 'away',
+          description: pick(rng, [
+            `CABECEIO NA TRAVE! O goleiro do ${defender.shortName} espalma no último momento!`,
+            `QUE DEFESA! O arqueiro do ${defender.shortName} salva em cima da linha após o escanteio!`,
+            `Bateu de cabeça! O goleiro do ${defender.shortName} faz grande intervenção!`,
+            `Perigo real! O ${attacker.shortName} quase abriu o placar no escanteio — goleiro do ${defender.shortName} foi buscar!`,
+          ]),
+        });
       }
       continue;
     }

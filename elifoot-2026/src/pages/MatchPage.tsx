@@ -82,7 +82,9 @@ export default function MatchPage() {
     const timer = setTimeout(() => {
       const newEvents = result.events.filter((e) => e.minute === currentMinute + 1);
       if (newEvents.length) {
-        const latest = newEvents[0];
+        // Prioriza evento de gol se houver múltiplos no mesmo minuto (ex: escanteio + gol)
+        const goalEvent = newEvents.find((e) => e.type === 'goal' || e.type === 'penalty_scored');
+        const latest = goalEvent ?? newEvents[0];
         setLatestEvent(latest);
         if (latest.type === 'goal' || latest.type === 'penalty_scored') {
           soundEngine.play('goal');
