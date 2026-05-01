@@ -52,11 +52,20 @@ export const CHAMPIONS_EXTRA_SEEDS: ExtraSeed[] = [
 ];
 
 // Times paulistas para o Campeonato Paulista (além dos BR: PAL, COR, SAO, RBB)
+// 12 extras + 4 BR = 16 times — 4 grupos de 4
 export const PAULISTAO_EXTRA_SEEDS: ExtraSeed[] = [
-  { id: 'san', name: 'Santos',      shortName: 'SAN', city: 'Santos',   country: 'BR', primaryColor: '#ffffff', secondaryColor: '#000000', tier: 'top',  reputation: 80, budget: 360000, squadSeed: 401 },
-  { id: 'pon', name: 'Ponte Preta', shortName: 'PON', city: 'Campinas', country: 'BR', primaryColor: '#000000', secondaryColor: '#ffffff', tier: 'low',  reputation: 57, budget: 130000, squadSeed: 402 },
-  { id: 'gua', name: 'Guarani',     shortName: 'GUA', city: 'Campinas', country: 'BR', primaryColor: '#1c5b3d', secondaryColor: '#ffffff', tier: 'low',  reputation: 54, budget: 110000, squadSeed: 403 },
-  { id: 'itu', name: 'Ituano',      shortName: 'ITU', city: 'Itu',      country: 'BR', primaryColor: '#e30613', secondaryColor: '#000000', tier: 'low',  reputation: 50, budget:  95000, squadSeed: 404 },
+  { id: 'san', name: 'Santos',           shortName: 'SAN', city: 'Santos',         country: 'BR', primaryColor: '#ffffff', secondaryColor: '#000000', tier: 'top',  reputation: 80, budget: 360000, squadSeed: 401 },
+  { id: 'pon', name: 'Ponte Preta',      shortName: 'PON', city: 'Campinas',       country: 'BR', primaryColor: '#000000', secondaryColor: '#ffffff', tier: 'low',  reputation: 57, budget: 130000, squadSeed: 402 },
+  { id: 'gua', name: 'Guarani',          shortName: 'GUA', city: 'Campinas',       country: 'BR', primaryColor: '#1c5b3d', secondaryColor: '#ffffff', tier: 'low',  reputation: 54, budget: 110000, squadSeed: 403 },
+  { id: 'itu', name: 'Ituano',           shortName: 'ITU', city: 'Itu',            country: 'BR', primaryColor: '#e30613', secondaryColor: '#000000', tier: 'low',  reputation: 50, budget:  95000, squadSeed: 404 },
+  { id: 'mir', name: 'Mirassol',         shortName: 'MIR', city: 'Mirassol',       country: 'BR', primaryColor: '#ffd700', secondaryColor: '#000000', tier: 'low',  reputation: 53, budget: 100000, squadSeed: 405 },
+  { id: 'nov', name: 'Novorizontino',    shortName: 'NOV', city: 'Novo Horizonte', country: 'BR', primaryColor: '#000000', secondaryColor: '#e30613', tier: 'low',  reputation: 52, budget:  95000, squadSeed: 406 },
+  { id: 'sbe', name: 'São Bernardo',     shortName: 'SBC', city: 'São Bernardo',   country: 'BR', primaryColor: '#0d4ea2', secondaryColor: '#ffffff', tier: 'low',  reputation: 51, budget:  90000, squadSeed: 407 },
+  { id: 'ags', name: 'Água Santa',       shortName: 'AGS', city: 'Diadema',        country: 'BR', primaryColor: '#003da5', secondaryColor: '#ffd700', tier: 'low',  reputation: 49, budget:  85000, squadSeed: 408 },
+  { id: 'ilm', name: 'Inter de Limeira', shortName: 'ILM', city: 'Limeira',        country: 'BR', primaryColor: '#003da5', secondaryColor: '#ffffff', tier: 'low',  reputation: 48, budget:  80000, squadSeed: 409 },
+  { id: 'psp', name: 'Portuguesa',       shortName: 'LUS', city: 'São Paulo',      country: 'BR', primaryColor: '#e30613', secondaryColor: '#1c5b3d', tier: 'low',  reputation: 55, budget: 110000, squadSeed: 410 },
+  { id: 'bsp', name: 'Botafogo-SP',      shortName: 'BFC', city: 'Ribeirão Preto', country: 'BR', primaryColor: '#000000', secondaryColor: '#ffffff', tier: 'low',  reputation: 50, budget:  88000, squadSeed: 411 },
+  { id: 'sad', name: 'Santo André',      shortName: 'AND', city: 'Santo André',    country: 'BR', primaryColor: '#000000', secondaryColor: '#e30613', tier: 'low',  reputation: 49, budget:  85000, squadSeed: 412 },
 ];
 
 // Times sul-americanos para a Sul-Americana (diferentes dos da Libertadores)
@@ -73,12 +82,24 @@ export const SULAMERICANA_EXTRA_SEEDS: ExtraSeed[] = [
   { id: 'dnj', name: 'Defensa y Justicia', shortName: 'DNJ', city: 'Buenos Aires',  country: 'AR', primaryColor: '#ffd700', secondaryColor: '#1c5b3d', tier: 'low', reputation: 66, budget: 125000, squadSeed: 510 },
 ];
 
-// Representantes de confederações para o FIFA Mundial de Clubes
+// Representantes de confederações para o FIFA Mundial de Clubes (32 times na vida real)
+// No jogo simulamos 8 times — 1 vaga por confederação não coberta por BR/SA/EU + aleatorização por temporada
 export const MUNDIAL_EXTRA_SEEDS: ExtraSeed[] = [
-  { id: 'alh', name: 'Al-Hilal',           shortName: 'HIL', city: 'Riad',    country: 'SA', primaryColor: '#003da5', secondaryColor: '#ffffff', tier: 'top', reputation: 82, budget: 800000, squadSeed: 601 },
-  { id: 'ahl', name: 'Al-Ahly',            shortName: 'AHL', city: 'Cairo',   country: 'EG', primaryColor: '#e30613', secondaryColor: '#ffffff', tier: 'mid', reputation: 75, budget: 280000, squadSeed: 602 },
-  { id: 'sel', name: 'Seattle Sounders',   shortName: 'SEA', city: 'Seattle', country: 'US', primaryColor: '#005695', secondaryColor: '#5d9741', tier: 'mid', reputation: 70, budget: 300000, squadSeed: 603 },
-  { id: 'urw', name: 'Urawa Red Diamonds', shortName: 'URW', city: 'Saitama', country: 'JP', primaryColor: '#e30613', secondaryColor: '#000000', tier: 'mid', reputation: 68, budget: 250000, squadSeed: 604 },
+  // AFC (Ásia)
+  { id: 'alh', name: 'Al-Hilal',             shortName: 'HIL', city: 'Riad',          country: 'SA', primaryColor: '#003da5', secondaryColor: '#ffffff', tier: 'top', reputation: 83, budget: 850000, squadSeed: 601 },
+  { id: 'urw', name: 'Urawa Red Diamonds',   shortName: 'URW', city: 'Saitama',       country: 'JP', primaryColor: '#e30613', secondaryColor: '#000000', tier: 'mid', reputation: 70, budget: 260000, squadSeed: 604 },
+  { id: 'alns', name: 'Al-Nassr',            shortName: 'ANS', city: 'Riad',          country: 'SA', primaryColor: '#ffd700', secondaryColor: '#003da5', tier: 'top', reputation: 80, budget: 800000, squadSeed: 607 },
+  { id: 'yhm',  name: 'Yokohama F. Marinos', shortName: 'YFM', city: 'Yokohama',      country: 'JP', primaryColor: '#003da5', secondaryColor: '#e30613', tier: 'mid', reputation: 68, budget: 240000, squadSeed: 608 },
+  // CAF (África)
+  { id: 'ahl', name: 'Al-Ahly',              shortName: 'AHL', city: 'Cairo',         country: 'EG', primaryColor: '#e30613', secondaryColor: '#ffffff', tier: 'mid', reputation: 76, budget: 290000, squadSeed: 602 },
+  { id: 'sun', name: 'Mamelodi Sundowns',    shortName: 'SUN', city: 'Pretória',      country: 'ZA', primaryColor: '#ffd700', secondaryColor: '#003da5', tier: 'mid', reputation: 68, budget: 200000, squadSeed: 605 },
+  { id: 'wyd', name: 'Wydad Casablanca',     shortName: 'WYD', city: 'Casablanca',    country: 'MA', primaryColor: '#e30613', secondaryColor: '#ffffff', tier: 'mid', reputation: 65, budget: 180000, squadSeed: 609 },
+  // CONCACAF (América do Norte/Central)
+  { id: 'sel', name: 'Seattle Sounders',     shortName: 'SEA', city: 'Seattle',       country: 'US', primaryColor: '#005695', secondaryColor: '#5d9741', tier: 'mid', reputation: 71, budget: 310000, squadSeed: 603 },
+  { id: 'mty', name: 'Monterrey',            shortName: 'MTY', city: 'Monterrey',     country: 'MX', primaryColor: '#003da5', secondaryColor: '#e30613', tier: 'mid', reputation: 73, budget: 280000, squadSeed: 606 },
+  { id: 'pch', name: 'Pachuca',              shortName: 'PAC', city: 'Pachuca',       country: 'MX', primaryColor: '#0d4ea2', secondaryColor: '#ffffff', tier: 'mid', reputation: 69, budget: 240000, squadSeed: 610 },
+  // OFC (Oceania)
+  { id: 'auc', name: 'Auckland City',        shortName: 'AKL', city: 'Auckland',      country: 'NZ', primaryColor: '#0d4ea2', secondaryColor: '#ffffff', tier: 'low', reputation: 55, budget: 100000, squadSeed: 611 },
 ];
 
 // Seleções nacionais para a Copa do Mundo FIFA (a cada 4 temporadas)

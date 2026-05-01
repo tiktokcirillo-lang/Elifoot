@@ -4,7 +4,7 @@ import { useGameStore } from '@/store/gameStore';
 import {
   Home, Trophy, Users, Calendar, LogOut, Save, ArrowRightLeft,
   Dumbbell, DollarSign, Shield, History, Volume2, VolumeX,
-  Handshake, MoreHorizontal, X, AlertTriangle,
+  Handshake, MoreHorizontal, X, AlertTriangle, BarChart2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useI18nStore, useT, type Lang } from '@/i18n';
@@ -126,6 +126,7 @@ export default function Layout() {
           <NavItem to="/game/finance" icon={<DollarSign className="w-4 h-4" />}>{t('nav_finance')}</NavItem>
           <NavItem to="/game/tactics" icon={<Shield className="w-4 h-4" />}>{t('nav_tactics')}</NavItem>
           <NavItem to="/game/sponsors" icon={<Handshake className="w-4 h-4" />}>Patrocínios</NavItem>
+          <NavItem to="/game/rankings" icon={<BarChart2 className="w-4 h-4" />}>Rankings</NavItem>
           <NavItem to="/game/history" icon={<History className="w-4 h-4" />}>{t('nav_history')}</NavItem>
           <div className="px-3 pt-3 pb-1 text-xs uppercase tracking-wider text-white/30">{t('nav_competitions')}</div>
           {save.competitions.map((c) => (
@@ -175,6 +176,7 @@ export default function Layout() {
                 { to: '/game/training', icon: <Dumbbell className="w-5 h-5" />, label: 'Treino' },
                 { to: '/game/tactics', icon: <Shield className="w-5 h-5" />, label: 'Tática' },
                 { to: '/game/sponsors', icon: <Handshake className="w-5 h-5" />, label: 'Patrocínios' },
+                { to: '/game/rankings', icon: <BarChart2 className="w-5 h-5" />, label: 'Rankings' },
                 { to: '/game/history', icon: <History className="w-5 h-5" />, label: 'Histórico' },
               ].map(({ to, icon, label }) => (
                 <NavLink

@@ -13,6 +13,7 @@ import FinancePage from '@/pages/FinancePage';
 import TacticsPage from '@/pages/TacticsPage';
 import HistoryPage from '@/pages/HistoryPage';
 import SponsorsPage from '@/pages/SponsorsPage';
+import RankingsPage from '@/pages/RankingsPage';
 import Layout from '@/components/Layout';
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/game/tactics" element={<TacticsPage />} />
         <Route path="/game/history" element={<HistoryPage />} />
         <Route path="/game/sponsors" element={<SponsorsPage />} />
+        <Route path="/game/rankings" element={<RankingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

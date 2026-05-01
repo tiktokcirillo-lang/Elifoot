@@ -31,6 +31,7 @@ import { applyWeeklyTraining } from '@/engine/trainingEngine';
 import { autoPickStartingEleven, generateYouthPlayer, generateSquad } from '@/engine/playerGenerator';
 import { processWeeklyFinances, processTicketRevenue, recordTransfer } from '@/engine/financeEngine';
 import { isSeasonOver, processSeasonEnd, generateBoardObjectives, startNewSeason } from '@/engine/seasonEngine';
+import { createRng } from '@/utils/random';
 
 // ============================================================
 // Utilidades exportadas
@@ -114,6 +115,33 @@ function pushNews(save: SaveGame, news: Omit<NewsItem, 'id' | 'read' | 'turn'>) 
   if (save.news.length > 200) save.news = save.news.slice(0, 200);
 }
 
+// Atualiza stats de jogadores (gols, cartões, aparências) após um jogo simulado
+function updateStatsFromFixture(teams: Team[], fixture: Fixture): void {
+  if (!fixture.result) return;
+  const home = teams.find((t) => t.id === fixture.homeTeamId);
+  const away = teams.find((t) => t.id === fixture.awayTeamId);
+  if (!home || !away) return;
+
+  // Aparências: todos os 11 titulares
+  [home, away].forEach((team) => {
+    team.starting11.slice(0, 11).forEach((pid) => {
+      const p = team.squad.find((pl) => pl.id === pid);
+      if (p) { p.stats.appearances++; p.stats.minutesPlayed += 90; }
+    });
+  });
+
+  // Gols e cartões pelos eventos
+  for (const ev of fixture.result.events) {
+    if (!ev.playerId) continue;
+    const team = ev.side === 'home' ? home : away;
+    const player = team.squad.find((p) => p.id === ev.playerId);
+    if (!player) continue;
+    if (ev.type === 'goal' || ev.type === 'penalty_scored') player.stats.goals++;
+    else if (ev.type === 'yellow_card') player.stats.yellowCards++;
+    else if (ev.type === 'red_card') player.stats.redCards++;
+  }
+}
+
 function simulateAllPendingFixturesForTurn(save: SaveGame, turn: number) {
   for (const comp of save.competitions) {
     if (comp.finished) continue;
@@ -141,6 +169,7 @@ function simulateAllPendingFixturesForTurn(save: SaveGame, turn: number) {
       const result = simulateMatch(home, away, { decidePenalties: isSingleLegKnockout });
       fixture.result = result;
       fixture.played = true;
+      updateStatsFromFixture(save.teams, fixture);
 
       if (
         comp.format === 'round_robin' ||
@@ -276,26 +305,28 @@ function generateInitialCompetitions(
     seed: season * 1000 + 4,
   });
 
-  // ── Mundial de Clubes (8 times, top de cada confederação) ──
+  // ── Mundial de Clubes (8 times — 2 CONMEBOL BR, 1 CONMEBOL SA, 1 UEFA, 4 outras confederações)
+  // Rotaciona times de AFC/CAF/CONCACAF por temporada para variedade
   const top2BrMundial = sortedByRep.slice(0, 2).map((t) => t.id);
-  const top2SaMundial = allTeams
+  const top1SaMundial = allTeams
     .filter((t) => LIBERTADORES_EXTRA_SEEDS.some((s) => s.id === t.id))
     .sort((a, b) => b.reputation - a.reputation)
-    .slice(0, 2)
+    .slice(0, 1)
     .map((t) => t.id);
-  const top2EuMundial = allTeams
+  const top1EuMundial = allTeams
     .filter((t) => CHAMPIONS_EXTRA_SEEDS.some((s) => s.id === t.id))
     .sort((a, b) => b.reputation - a.reputation)
-    .slice(0, 2)
+    .slice(0, 1)
     .map((t) => t.id);
-  const mundialExtrasIds = allTeams
-    .filter((t) => MUNDIAL_EXTRA_SEEDS.some((s) => s.id === t.id))
-    .sort((a, b) => b.reputation - a.reputation)
-    .slice(0, 2)
-    .map((t) => t.id);
+  // Rotaciona times extras (AFC/CAF/CONCACAF/OFC) por temporada — simulando classificação dinâmica
+  const mundialExtrasPool = allTeams
+    .filter((t) => MUNDIAL_EXTRA_SEEDS.some((s) => s.id === t.id));
+  const mundialRng = createRng(season * 999 + 7);
+  const shuffledExtras = [...mundialExtrasPool].sort(() => mundialRng() - 0.5);
+  const mundialExtrasIds = shuffledExtras.slice(0, 4).map((t) => t.id);
   // Garante 8 times únicos
-  const mundialTeamIds = [...new Set([...top2BrMundial, ...top2SaMundial, ...top2EuMundial, ...mundialExtrasIds])];
-  // Completa até 8 se necessário com outros BR
+  const mundialTeamIds = [...new Set([...top2BrMundial, ...top1SaMundial, ...top1EuMundial, ...mundialExtrasIds])];
+  // Completa até 8 se necessário
   if (mundialTeamIds.length < 8) {
     for (const t of sortedByRep) {
       if (!mundialTeamIds.includes(t.id)) mundialTeamIds.push(t.id);
@@ -343,19 +374,19 @@ function generateInitialCompetitions(
     }
   }
 
-  // ── Paulistão (apenas se o time do usuário for paulista) ──
+  // ── Paulistão — 16 times: 4 BR paulistas + 12 extras → 4 grupos de 4 ──
   if (SP_TEAM_IDS.has(userTeamId)) {
     const spBrTeams = teams.filter((t) => SP_TEAM_IDS.has(t.id)).map((t) => t.id);
     const spExtraTeams = allTeams
       .filter((t) => PAULISTAO_EXTRA_SEEDS.some((s) => s.id === t.id))
       .map((t) => t.id);
-    const paulistaoTeamIds = [...spBrTeams, ...spExtraTeams]; // 4 BR + 4 extras = 8
+    const paulistaoTeamIds = [...spBrTeams, ...spExtraTeams]; // 4 BR + até 12 extras = 16
 
-    if (paulistaoTeamIds.length >= 4) {
+    if (paulistaoTeamIds.length >= 8) {
       const paulistao = createPaulistao({
-        teamIds: paulistaoTeamIds,
-        numberOfGroups: 2,
-        teamsPerGroup: Math.floor(paulistaoTeamIds.length / 2),
+        teamIds: paulistaoTeamIds.slice(0, 16),
+        numberOfGroups: 4,
+        teamsPerGroup: 4,
         season,
         startTurn: 2,
         turnsBetweenRounds: 7,
@@ -594,6 +625,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       boardObjectives: generateBoardObjectives(resolvedUserTeam),
       seasonRecords: [],
       hallOfFame: [],
+      seasonAwards: [],
       seasonOver: false,
       youthPlayers: [
         generateYouthPlayer(2026 * 300 + 1, 2026),
@@ -628,6 +660,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       if (!loaded.seasonRecords)    loaded.seasonRecords  = [];
       if (!loaded.hallOfFame)       loaded.hallOfFame     = [];
+      if (!loaded.seasonAwards)     loaded.seasonAwards   = [];
       if (loaded.seasonOver === undefined) loaded.seasonOver = false;
       if (!loaded.youthPlayers)     loaded.youthPlayers   = [
         generateYouthPlayer(loaded.season * 300 + 1, loaded.season),
@@ -684,6 +717,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (!home || !away) continue;
         f.result = simulateMatch(home, away, {});
         f.played = true;
+        updateStatsFromFixture(save.teams, f);
         if (comp.format === 'round_robin' || comp.format === 'groups_knockout') {
           if (f.stage === 'group' || f.stage === 'regular') {
             comp.standings = applyResultToStandings(comp.standings, f.homeTeamId, f.awayTeamId, f.result);
@@ -833,6 +867,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
     targetFixture.result = result;
     targetFixture.played = true;
+    updateStatsFromFixture(save.teams, targetFixture);
 
     const comp = save.competitions.find((c) => c.id === targetCompId)!;
     if (
@@ -966,6 +1001,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     targetFixture.result = combined;
     targetFixture.played = true;
+    updateStatsFromFixture(save.teams, targetFixture);
 
     const comp = save.competitions.find((c) => c.id === targetCompId)!;
     if (

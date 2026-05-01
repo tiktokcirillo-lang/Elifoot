@@ -4,6 +4,7 @@ import type {
   Team,
   BoardObjective,
   ObjectiveType,
+  SeasonAward,
 } from '@/types';
 import { sortStandings } from '@/competitions/brasileirao';
 import { autoPickStartingEleven, generatePlayer, generateYouthPlayer } from '@/engine/playerGenerator';
@@ -117,6 +118,62 @@ export function processSeasonEnd(save: SaveGame): void {
 
   save.seasonOver = true;
 
+  // ── Prêmios da temporada ─────────────────────────────────────
+  const allPlayers = save.teams.flatMap((t) =>
+    t.squad.map((p) => ({ player: p, team: t })),
+  );
+
+  const topScorer = allPlayers.reduce<typeof allPlayers[0] | null>(
+    (best, curr) => (curr.player.stats.goals > (best?.player.stats.goals ?? -1) ? curr : best),
+    null,
+  );
+  const bolaDeOuro = allPlayers.reduce<typeof allPlayers[0] | null>(
+    (best, curr) => (curr.player.overall > (best?.player.overall ?? -1) ? curr : best),
+    null,
+  );
+  const revelacao = allPlayers
+    .filter((x) => x.player.age <= 23 && x.player.stats.appearances > 0)
+    .reduce<typeof allPlayers[0] | null>(
+      (best, curr) => (curr.player.overall > (best?.player.overall ?? -1) ? curr : best),
+      null,
+    );
+
+  const userTitlesThisSeason = save.competitions.filter(
+    (c) => c.championId === save.controlledTeamId,
+  ).length;
+
+  const award: SeasonAward = { season: save.season };
+  if (topScorer && topScorer.player.stats.goals > 0) {
+    award.artilheiro = {
+      playerName: topScorer.player.name,
+      teamName: topScorer.team.name,
+      goals: topScorer.player.stats.goals,
+    };
+  }
+  if (bolaDeOuro) {
+    award.boladeOuro = {
+      playerName: bolaDeOuro.player.name,
+      teamName: bolaDeOuro.team.name,
+      overall: bolaDeOuro.player.overall,
+    };
+  }
+  if (revelacao) {
+    award.revelacao = {
+      playerName: revelacao.player.name,
+      teamName: revelacao.team.name,
+      overall: revelacao.player.overall,
+      age: revelacao.player.age,
+    };
+  }
+  award.melhorTecnico = {
+    managerName: save.managerName,
+    teamName: userTeam?.name ?? '',
+    titulos: userTitlesThisSeason,
+  };
+
+  if (!save.seasonAwards) save.seasonAwards = [];
+  save.seasonAwards.push(award);
+
   // Verificar objetivos críticos para risco de demissão
   const criticalFailed = save.boardObjectives.some(
     (o) =>
@@ -129,7 +186,6 @@ export function processSeasonEnd(save: SaveGame): void {
       save.dismissed = true;
     }
   } else {
-    // Objetivos críticos cumpridos: resetar avisos
     save.managerWarnings = 0;
   }
 }

@@ -111,6 +111,14 @@ export interface HallOfFameEntry {
   championName: string;
 }
 
+export interface SeasonAward {
+  season: number;
+  artilheiro?: { playerName: string; teamName: string; goals: number };
+  boladeOuro?: { playerName: string; teamName: string; overall: number };
+  revelacao?: { playerName: string; teamName: string; overall: number; age: number };
+  melhorTecnico?: { managerName: string; teamName: string; titulos: number };
+}
+
 // ============================================================
 // Patrocinadores
 // ============================================================
@@ -337,6 +345,7 @@ export interface SaveGame {
   // Multitemporada
   seasonRecords: SeasonRecord[];
   hallOfFame: HallOfFameEntry[];
+  seasonAwards: SeasonAward[];
   seasonOver: boolean;
   // Base (academia juvenil)
   youthPlayers: Player[];

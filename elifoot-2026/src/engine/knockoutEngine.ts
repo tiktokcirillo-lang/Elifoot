@@ -189,12 +189,13 @@ function resolveKnockoutComp(comp: Competition, save: SaveGame): void {
 
     // Gera próxima fase
     const winners = stagePairs.map((p) => p.winnerId!);
-    const isFinal = next === 'final';
     const newPairs = createPairs(winners, next);
     const startRound = Math.max(...comp.fixtures.map((f) => f.round)) + 1;
     const leg1Turn = save.currentTurn + 7;
     const leg2Turn = save.currentTurn + 14;
-    const newFixtures = createFixturesForPairs(newPairs, comp.id, leg1Turn, leg2Turn, !isFinal, startRound);
+    // Respeita singleLegKnockout em todas as fases (Copa do Mundo = jogo único, Paulistão/Libertadores = ida e volta)
+    const twoLegNext = comp.singleLegKnockout !== true;
+    const newFixtures = createFixturesForPairs(newPairs, comp.id, leg1Turn, leg2Turn, twoLegNext, startRound);
     comp.fixtures.push(...newFixtures);
     pairs.push(...newPairs);
     break;
@@ -211,7 +212,7 @@ function resolveGroupKnockoutComp(comp: Competition, save: SaveGame): void {
 
   if (!comp.knockoutBracket) comp.knockoutBracket = [];
 
-  if (groupsComplete && !comp.knockoutBracket.some((p) => p.stage === 'qf' || p.stage === 'r16')) {
+  if (groupsComplete && comp.knockoutBracket.length === 0) {
     // Fase de grupos encerrada — gerar oitavas ou quartas de final
     if (!comp.groups) return;
     const groupNames = Object.keys(comp.groups).sort();
@@ -228,7 +229,12 @@ function resolveGroupKnockoutComp(comp: Competition, save: SaveGame): void {
       }
     }
 
-    const knockoutStage: KnockoutPair['stage'] = qualifiers.length <= 8 ? 'qf' : 'r16';
+    // 2 qualifiers → final direto | 4 → semi | 8 → quartas | >8 → oitavas
+    const knockoutStage: KnockoutPair['stage'] =
+      qualifiers.length <= 2 ? 'final' :
+      qualifiers.length <= 4 ? 'sf' :
+      qualifiers.length <= 8 ? 'qf' :
+      'r16';
     // Cruza grupos: 1ºA vs 2ºB, 1ºB vs 2ºA …
     const crossed: string[] = [];
     const half = groupNames.length;
