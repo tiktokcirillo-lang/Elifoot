@@ -318,6 +318,20 @@ export interface NewsItem {
 
 // ------------------------------------------------------------
 
+// ============================================================
+// Carreira do técnico
+// ============================================================
+
+export type ManagerSkillCategory = 'scouting' | 'motivation' | 'tactics' | 'youth' | 'finance';
+
+export interface ManagerSkillDef {
+  id: string;
+  name: string;
+  description: string;
+  category: ManagerSkillCategory;
+  cost: number; // XP necessário para desbloquear
+}
+
 export interface SaveGame {
   id: string;
   name: string;
@@ -354,4 +368,11 @@ export interface SaveGame {
   dismissed?: boolean;
   // Patrocínios
   sponsorOffers: SponsorOffer[];
+  // Carreira do técnico
+  managerReputation: number;    // 0 a 10000
+  managerXP: number;            // XP total acumulado (pode gastar em habilidades)
+  managerXPSpent: number;       // XP já gasto
+  unlockedSkills: string[];     // ids das habilidades desbloqueadas
+  boardConfidence: number;      // 0 a 100 (confiança da diretoria)
+  careerClubs: string[];        // nomes dos times que já treinou
 }

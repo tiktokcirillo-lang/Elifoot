@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
-import { ChevronRight, FastForward, Target, DollarSign, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle } from 'lucide-react';
+import { ChevronRight, FastForward, Target, DollarSign, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, Star, Briefcase } from 'lucide-react';
 import { calcWeeklyCashflow } from '@/engine/financeEngine';
+import { reputationTier } from '@/data/managerSkills';
 
 export default function DashboardPage() {
   const save = useGameStore((s) => s.save);
@@ -47,6 +48,8 @@ export default function DashboardPage() {
   // Mostrar botão de nova temporada quando a temporada acabou
   if (save.seasonOver) {
     const lastRecord = save.seasonRecords[save.seasonRecords.length - 1];
+    const rep = save.managerReputation ?? 0;
+    const tier = reputationTier(rep);
     return (
       <div className="space-y-6">
         <div className="panel p-6 text-center border border-gold-500/30">
@@ -60,6 +63,18 @@ export default function DashboardPage() {
               )}
             </div>
           )}
+          {/* Badge de reputação */}
+          <div className="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 mb-4 text-sm">
+            <Briefcase className="w-4 h-4 text-yellow-400" />
+            <span className="text-white/70">Reputação:</span>
+            <span className="font-bold text-yellow-400">{rep.toLocaleString('pt-BR')}</span>
+            <span className="text-white/50">({tier.label})</span>
+            <span className="flex gap-0.5 ml-1">
+              {[1,2,3,4,5].map((i) => (
+                <Star key={i} className={`w-3 h-3 ${i <= tier.stars ? 'text-yellow-400 fill-yellow-400' : 'text-white/20'}`} />
+              ))}
+            </span>
+          </div>
           <div className="flex flex-col gap-3 max-w-xs mx-auto">
             <button
               onClick={() => startNewSeason()}
@@ -67,6 +82,9 @@ export default function DashboardPage() {
             >
               <RefreshCw className="w-5 h-5" /> Iniciar Temporada {save.season + 1}
             </button>
+            <Link to="/game/career" className="btn-ghost text-sm flex items-center justify-center gap-2">
+              <Briefcase className="w-4 h-4" /> Ver Carreira & Habilidades
+            </Link>
             <Link to="/game/history" className="btn-ghost text-sm flex items-center justify-center gap-2">
               Ver historial completo
             </Link>

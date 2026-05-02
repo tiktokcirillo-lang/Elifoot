@@ -16,6 +16,7 @@ import type {
   Formation,
 } from '@/types';
 import { SPONSOR_BRANDS } from '@/data/sponsors';
+import { MANAGER_SKILLS } from '@/data/managerSkills';
 import { simulateMatch, simulatePenaltyShootout } from '@/engine/matchSimulator';
 import {
   createBrasileirao,
@@ -93,6 +94,7 @@ interface GameState {
   // Carreira
   switchTeam: (teamId: string) => void;
   resignFromClub: () => void;
+  unlockSkill: (skillId: string) => void;
 
   // Leitura
   getUserTeam: () => Team | undefined;
@@ -634,6 +636,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       ],
       managerWarnings: 0,
       sponsorOffers: [],
+      managerReputation: 0,
+      managerXP: 0,
+      managerXPSpent: 0,
+      unlockedSkills: [],
+      boardConfidence: 60,
+      careerClubs: [resolvedUserTeam.name],
     };
 
     pushNews(save, {
@@ -669,6 +677,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       ];
       if (loaded.managerWarnings === undefined) loaded.managerWarnings = 0;
       if (!loaded.sponsorOffers)             loaded.sponsorOffers   = [];
+      if (loaded.managerReputation === undefined) loaded.managerReputation = 0;
+      if (loaded.managerXP         === undefined) loaded.managerXP         = 0;
+      if (loaded.managerXPSpent    === undefined) loaded.managerXPSpent    = 0;
+      if (!loaded.unlockedSkills)                loaded.unlockedSkills     = [];
+      if (loaded.boardConfidence   === undefined) loaded.boardConfidence    = 60;
+      if (!loaded.careerClubs) {
+        const ut = loaded.teams.find((t) => t.id === loaded.controlledTeamId);
+        loaded.careerClubs = ut ? [ut.name] : [];
+      }
       set({ save: loaded });
     }
   },
@@ -1347,6 +1364,20 @@ export const useGameStore = create<GameState>((set, get) => ({
       title: 'Você pediu demissão',
       body: 'Acesse Histórico para escolher um novo clube.',
     });
+    set({ save });
+  },
+
+  unlockSkill(skillId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const skill = MANAGER_SKILLS.find((s) => s.id === skillId);
+    if (!skill) return;
+    const available = (save.managerXP ?? 0) - (save.managerXPSpent ?? 0);
+    if (available < skill.cost) return;
+    if ((save.unlockedSkills ?? []).includes(skillId)) return;
+    save.managerXPSpent = (save.managerXPSpent ?? 0) + skill.cost;
+    save.unlockedSkills = [...(save.unlockedSkills ?? []), skillId];
     set({ save });
   },
 

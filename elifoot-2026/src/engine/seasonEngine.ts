@@ -174,7 +174,41 @@ export function processSeasonEnd(save: SaveGame): void {
   if (!save.seasonAwards) save.seasonAwards = [];
   save.seasonAwards.push(award);
 
-  // Verificar objetivos críticos para risco de demissão
+  // ── XP e reputação do técnico ─────────────────────────────
+  let xpGained = 0;
+  const achievedCount = save.boardObjectives.filter((o) => o.status === 'achieved').length;
+  const failedCount   = save.boardObjectives.filter((o) => o.status === 'failed').length;
+
+  if (userTitlesThisSeason > 0) xpGained += userTitlesThisSeason * 600;
+  if (brasileirao?.championId === save.controlledTeamId) xpGained += 400; // bônus por título de liga
+  if (userPosition > 0 && userPosition <= 5)  xpGained += 200;
+  else if (userPosition > 0 && userPosition <= 10) xpGained += 100;
+  if (achievedCount === save.boardObjectives.length && save.boardObjectives.length > 0) xpGained += 150;
+
+  if (save.managerReputation === undefined) save.managerReputation = 0;
+  if (save.managerXP        === undefined) save.managerXP         = 0;
+  if (save.managerXPSpent   === undefined) save.managerXPSpent    = 0;
+  if (!save.unlockedSkills)                save.unlockedSkills     = [];
+  if (save.boardConfidence  === undefined) save.boardConfidence    = 60;
+  if (!save.careerClubs)                   save.careerClubs        = [];
+
+  save.managerXP += xpGained;
+  // Reputação sobe proporcionalmente ao XP (não gasta, apenas reflete acúmulo)
+  save.managerReputation = Math.min(10000, save.managerReputation + Math.floor(xpGained * 0.8));
+
+  // ── Confiança da diretoria ────────────────────────────────
+  const confidenceDelta =
+    achievedCount * 15
+    - failedCount * 20
+    + (userTitlesThisSeason > 0 ? 20 : 0);
+  save.boardConfidence = clamp((save.boardConfidence ?? 60) + confidenceDelta, 0, 100);
+
+  // Registrar clube atual na carreira
+  if (userTeam && !save.careerClubs.includes(userTeam.name)) {
+    save.careerClubs.push(userTeam.name);
+  }
+
+  // ── Verificar objetivos críticos para risco de demissão ───
   const criticalFailed = save.boardObjectives.some(
     (o) =>
       (o.type === 'avoid_relegation' || o.type === 'league_title') &&
@@ -182,7 +216,7 @@ export function processSeasonEnd(save: SaveGame): void {
   );
   if (criticalFailed) {
     save.managerWarnings = (save.managerWarnings ?? 0) + 1;
-    if (save.managerWarnings >= 2) {
+    if (save.managerWarnings >= 2 || save.boardConfidence < 15) {
       save.dismissed = true;
     }
   } else {
@@ -260,6 +294,28 @@ export function startNewSeason(save: SaveGame): void {
   const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
   if (userTeam) {
     save.boardObjectives = generateBoardObjectives(userTeam);
+  }
+
+  // ── Efeitos de habilidades do técnico ─────────────────────
+  const skills = save.unlockedSkills ?? [];
+
+  // financial_wizard: -5% nos salários do elenco do usuário
+  if (skills.includes('financial_wizard') && userTeam) {
+    userTeam.squad.forEach((p) => {
+      p.wageMonthly = Math.max(1, Math.round(p.wageMonthly * 0.95));
+    });
+  }
+
+  // master_motivator: +10 morale para todos do elenco do usuário
+  if (skills.includes('master_motivator') && userTeam) {
+    userTeam.squad.forEach((p) => {
+      p.morale = clamp(p.morale + 10, 0, 100);
+    });
+  }
+
+  // board_champion: +10 na confiança da diretoria
+  if (skills.includes('board_champion')) {
+    save.boardConfidence = clamp((save.boardConfidence ?? 60) + 10, 0, 100);
   }
 
   // ── Limpar mercado e histórico financeiro ─────────────────
