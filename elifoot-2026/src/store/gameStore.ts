@@ -33,6 +33,7 @@ import { autoPickStartingEleven, generateYouthPlayer, generateSquad } from '@/en
 import { processWeeklyFinances, processTicketRevenue, recordTransfer } from '@/engine/financeEngine';
 import { isSeasonOver, processSeasonEnd, generateBoardObjectives, startNewSeason } from '@/engine/seasonEngine';
 import { createRng } from '@/utils/random';
+import { generateAvailableScouts, generateScoutReport, generateLoanOffers } from '@/engine/scoutingEngine';
 
 // ============================================================
 // Utilidades exportadas
@@ -128,6 +129,19 @@ interface GameState {
   getCompetition: (id: string) => Competition | undefined;
   getNextUserFixture: () => Fixture | undefined;
   markNewsRead: (newsId: string) => void;
+  // Scouting
+  hireScout: (scoutId: string) => void;
+  fireScout: (scoutId: string) => void;
+  assignScout: (scoutId: string) => void;
+  markScoutReportRead: (reportId: string) => void;
+  signScoutedPlayer: (reportId: string) => void;
+  // Empréstimos
+  acceptLoanOffer: (offerId: string) => void;
+  rejectLoanOffer: (offerId: string) => void;
+  // Interações com jogadores
+  resolvePlayerInteraction: (interactionId: string, optionIndex: number) => void;
+  // Avaliações pós-jogo
+  recordMatchRating: (fixtureId: string, ratings: Record<string, number>) => void;
 }
 
 // ============================================================
@@ -587,6 +601,52 @@ function executeTransfer(listing: TransferListing, bid: TransferBid, save: SaveG
   listing.bids.filter((b) => b.id !== bid.id).forEach((b) => (b.status = 'rejected'));
 }
 
+function createPlayerFromReport(report: import('@/types').ScoutReport, season: number): import('@/types').Player {
+  const rng = createRng(report.realOVR * 100 + report.age * 7 + report.estimatedValue);
+  const base = report.realOVR;
+  const clamp = (v: number) => Math.max(30, Math.min(99, Math.round(v)));
+  const noise = () => (rng() - 0.5) * 12;
+
+  let attack: number, defense: number, pace: number, technique: number, stamina: number;
+  switch (report.position) {
+    case 'GK':
+      defense = clamp(base * 1.15 + noise()); attack = clamp(base * 0.3 + noise());
+      pace = clamp(base * 0.55 + noise()); technique = clamp(base * 0.7 + noise()); stamina = clamp(base * 0.8 + noise());
+      break;
+    case 'DF':
+      defense = clamp(base * 1.1 + noise()); attack = clamp(base * 0.65 + noise());
+      pace = clamp(base * 0.85 + noise()); technique = clamp(base * 0.75 + noise()); stamina = clamp(base * 0.9 + noise());
+      break;
+    case 'MF':
+      attack = clamp(base * 0.9 + noise()); defense = clamp(base * 0.9 + noise());
+      pace = clamp(base * 0.85 + noise()); technique = clamp(base * 1.0 + noise()); stamina = clamp(base * 0.95 + noise());
+      break;
+    default: // FW
+      attack = clamp(base * 1.15 + noise()); defense = clamp(base * 0.55 + noise());
+      pace = clamp(base * 1.05 + noise()); technique = clamp(base * 0.95 + noise()); stamina = clamp(base * 0.85 + noise());
+  }
+
+  const foot = rng() > 0.85 ? 'L' as const : rng() > 0.7 ? 'B' as const : 'R' as const;
+  return {
+    id: nanoid(8),
+    name: report.name,
+    age: report.age,
+    position: report.position,
+    foot,
+    attack, defense, pace, technique, stamina,
+    overall: report.realOVR,
+    potential: report.realPotential,
+    morale: 65 + Math.floor(rng() * 25),
+    fitness: 70 + Math.floor(rng() * 20),
+    contractUntil: season + 1 + Math.floor(rng() * 3),
+    wageMonthly: Math.max(5, Math.round(report.estimatedValue * 0.003)),
+    marketValue: report.estimatedValue,
+    yellowCardsInComp: {},
+    appearancesInComp: {},
+    stats: { appearances: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, minutesPlayed: 0 },
+  };
+}
+
 // ============================================================
 // Store
 // ============================================================
@@ -676,6 +736,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       unlockedSkills: [],
       boardConfidence: 60,
       careerClubs: [resolvedUserTeam.name],
+      scouts: [],
+      scoutReports: [],
+      loanMarket: [],
+      activeLoans: [],
+      playerInteractions: [],
+      matchRatings: [],
     };
 
     pushNews(save, {
@@ -724,6 +790,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       loaded.teams.forEach((t) => t.squad.forEach((p) => {
         if (!p.appearancesInComp) p.appearancesInComp = {};
       }));
+      if (!loaded.scouts) loaded.scouts = [];
+      if (!loaded.scoutReports) loaded.scoutReports = [];
+      if (!loaded.loanMarket) loaded.loanMarket = [];
+      if (!loaded.activeLoans) loaded.activeLoans = [];
+      if (!loaded.playerInteractions) loaded.playerInteractions = [];
+      if (!loaded.matchRatings) loaded.matchRatings = [];
       set({ save: loaded });
     }
   },
@@ -879,6 +951,72 @@ export const useGameStore = create<GameState>((set, get) => ({
       (save.currentTurn === 14 || (save.currentTurn > 14 && save.currentTurn % 35 === 0))
     ) {
       generateSponsorOffer(save);
+    }
+
+    // Scout: entrega relatório quando missão termina
+    (save.scouts ?? []).forEach((scout) => {
+      if (scout.status === 'scouting' && scout.reportDueTurn && save.currentTurn >= scout.reportDueTurn) {
+        const report = generateScoutReport(scout, save.season, save.currentTurn);
+        if (!save.scoutReports) save.scoutReports = [];
+        save.scoutReports.unshift(report);
+        if (save.scoutReports.length > 50) save.scoutReports = save.scoutReports.slice(0, 50);
+        scout.status = 'idle';
+        scout.assignedTurn = undefined;
+        scout.reportDueTurn = undefined;
+        pushNews(save, { type: 'general', title: `Relatório: ${report.name}`, body: `${scout.name} encontrou um jogador. Acesse Scouting para ver.` });
+      }
+    });
+
+    // Mercado de empréstimos: atualiza a cada 28 turnos
+    if (save.currentTurn % 28 === 0 || !(save.loanMarket ?? []).some((o) => o.status === 'available')) {
+      if (!save.loanMarket) save.loanMarket = [];
+      save.loanMarket = save.loanMarket.map((o) =>
+        o.status === 'available' && save.currentTurn - o.offeredAt > 28
+          ? { ...o, status: 'expired' as const }
+          : o,
+      );
+      const existingIds = new Set(save.loanMarket.map((o) => o.playerId));
+      generateLoanOffers(save).forEach((o) => { if (!existingIds.has(o.playerId)) save.loanMarket!.push(o); });
+    }
+
+    // Interações com jogadores (a cada 21 turnos)
+    if (save.currentTurn % 21 === 0 && !save.dismissed) {
+      const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+      if (userTeam) {
+        if (!save.playerInteractions) save.playerInteractions = [];
+        const unresolved = save.playerInteractions.filter((i) => !i.resolved).map((i) => i.playerId);
+        const candidates = userTeam.squad.filter((p) => !unresolved.includes(p.id));
+        const unhappy = candidates.find((p) => p.morale < 40 && p.stats.appearances > 3);
+        if (unhappy) {
+          save.playerInteractions.push({
+            id: nanoid(8), playerId: unhappy.id, playerName: unhappy.name,
+            type: 'playing_time',
+            message: `${unhappy.name} está insatisfeito com o tempo de jogo e pediu uma conversa.`,
+            options: [
+              { label: 'Prometo mais oportunidades', moraleEffect: 15, confidenceEffect: 5 },
+              { label: 'Mantenha o foco no trabalho', moraleEffect: -5, confidenceEffect: 0 },
+              { label: 'Pode procurar outro clube', moraleEffect: -10, confidenceEffect: -5, acceptsRequest: true },
+            ],
+            resolved: false, turn: save.currentTurn,
+          });
+        }
+        const contractPlayer = candidates.find(
+          (p) => p.contractUntil <= save.season && p.morale > 50 && !unresolved.includes(p.id)
+        );
+        if (contractPlayer) {
+          save.playerInteractions.push({
+            id: nanoid(8), playerId: contractPlayer.id, playerName: contractPlayer.name,
+            type: 'contract_demand',
+            message: `${contractPlayer.name} quer discutir a renovação do contrato antes do fim da temporada.`,
+            options: [
+              { label: 'Renovar com aumento de 15%', moraleEffect: 20, confidenceEffect: 8 },
+              { label: 'Oferecer renovação sem aumento', moraleEffect: 5, confidenceEffect: 2 },
+              { label: 'Não estamos interessados em renovar', moraleEffect: -20, confidenceEffect: -5 },
+            ],
+            resolved: false, turn: save.currentTurn,
+          });
+        }
+      }
     }
 
     // Mercado de transferências
@@ -1472,6 +1610,156 @@ export const useGameStore = create<GameState>((set, get) => ({
     const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
     const item = save.news.find((n) => n.id === newsId);
     if (item) item.read = true;
+    set({ save });
+  },
+
+  // ── Scouting ──────────────────────────────────────────────
+
+  hireScout(scoutId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const available = generateAvailableScouts(save.season * 999);
+    const scout = available.find((s) => s.id === scoutId);
+    if (!scout) return;
+    if (!save.scouts) save.scouts = [];
+    if (save.scouts.some((s) => s.id === scoutId)) return;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam || userTeam.budget < scout.wageMontly * 3) {
+      pushNews(save, { type: 'finance', title: 'Budget insuficiente', body: `Não há budget para contratar ${scout.name}.` });
+      set({ save }); return;
+    }
+    userTeam.budget -= scout.wageMontly * 3;
+    save.scouts.push({ ...scout });
+    pushNews(save, { type: 'general', title: `Scout contratado: ${scout.name}`, body: `${scout.name} (qualidade ${scout.quality}/4) integra o staff de scouting.` });
+    set({ save });
+  },
+
+  fireScout(scoutId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    save.scouts = (save.scouts ?? []).filter((s) => s.id !== scoutId);
+    set({ save });
+  },
+
+  assignScout(scoutId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const scout = (save.scouts ?? []).find((s) => s.id === scoutId);
+    if (!scout || scout.status === 'scouting') return;
+    scout.status = 'scouting';
+    scout.assignedTurn = save.currentTurn;
+    scout.reportDueTurn = save.currentTurn + 14;
+    pushNews(save, { type: 'general', title: `Scout em missão: ${scout.name}`, body: `${scout.name} foi enviado para prospecção. Relatório em 14 dias.` });
+    set({ save });
+  },
+
+  markScoutReportRead(reportId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const report = (save.scoutReports ?? []).find((r) => r.id === reportId);
+    if (report) report.read = true;
+    set({ save });
+  },
+
+  signScoutedPlayer(reportId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const report = (save.scoutReports ?? []).find((r) => r.id === reportId);
+    if (!report) return;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam) return;
+    if (userTeam.squad.length >= 30) {
+      pushNews(save, { type: 'general', title: 'Elenco cheio', body: 'Libere um atleta antes de contratar.' });
+      set({ save }); return;
+    }
+    if (userTeam.budget < report.estimatedValue) {
+      pushNews(save, { type: 'finance', title: 'Budget insuficiente', body: `Precisaria de R$ ${(report.estimatedValue / 1000).toFixed(1)}M para contratar ${report.name}.` });
+      set({ save }); return;
+    }
+    userTeam.budget -= report.estimatedValue;
+    const player = createPlayerFromReport(report, save.season);
+    userTeam.squad.push(player);
+    save.scoutReports = (save.scoutReports ?? []).filter((r) => r.id !== reportId);
+    pushNews(save, { type: 'transfer', title: `Contratado: ${player.name}`, body: `${player.name} (${player.position}, ${player.age} anos, OVR ${player.overall}) assina pelo clube.` });
+    set({ save });
+  },
+
+  // ── Empréstimos ───────────────────────────────────────────
+
+  acceptLoanOffer(offerId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const offer = (save.loanMarket ?? []).find((o) => o.id === offerId && o.status === 'available');
+    if (!offer) return;
+    const fromTeam = save.teams.find((t) => t.id === offer.fromTeamId);
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!fromTeam || !userTeam) return;
+    if (userTeam.squad.length >= 30) {
+      pushNews(save, { type: 'general', title: 'Elenco cheio', body: 'Libere um atleta antes de aceitar empréstimo.' });
+      set({ save }); return;
+    }
+    const playerIdx = fromTeam.squad.findIndex((p) => p.id === offer.playerId);
+    if (playerIdx === -1) return;
+    const player = fromTeam.squad[playerIdx];
+    fromTeam.squad.splice(playerIdx, 1);
+    fromTeam.starting11 = fromTeam.starting11.filter((id) => id !== player.id);
+    fromTeam.bench = fromTeam.bench.filter((id) => id !== player.id);
+    userTeam.squad.push(player);
+    offer.status = 'accepted';
+    if (!save.activeLoans) save.activeLoans = [];
+    save.activeLoans.push({
+      id: nanoid(8), playerId: player.id,
+      originalTeamId: offer.fromTeamId, loanedToTeamId: save.controlledTeamId,
+      loanFeeMonthly: offer.loanFeeMonthly, loanUntil: offer.loanUntil, canRecall: false,
+    });
+    pushNews(save, { type: 'transfer', title: `Empréstimo: ${player.name}`, body: `${player.name} chega por empréstimo até ${offer.loanUntil}. Taxa: R$ ${offer.loanFeeMonthly}k/mês.` });
+    set({ save });
+  },
+
+  rejectLoanOffer(offerId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const offer = (save.loanMarket ?? []).find((o) => o.id === offerId);
+    if (offer) offer.status = 'expired';
+    set({ save });
+  },
+
+  // ── Interações com jogadores ──────────────────────────────
+
+  resolvePlayerInteraction(interactionId, optionIndex) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const interaction = (save.playerInteractions ?? []).find((i) => i.id === interactionId);
+    if (!interaction || interaction.resolved) return;
+    const option = interaction.options[optionIndex];
+    if (!option) return;
+    interaction.resolved = true;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    const player = userTeam?.squad.find((p) => p.id === interaction.playerId);
+    if (player) player.morale = Math.max(0, Math.min(100, player.morale + option.moraleEffect));
+    if (option.confidenceEffect) {
+      save.boardConfidence = Math.max(0, Math.min(100, (save.boardConfidence ?? 60) + option.confidenceEffect));
+    }
+    set({ save });
+  },
+
+  // ── Avaliações pós-jogo ───────────────────────────────────
+
+  recordMatchRating(fixtureId, ratings) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    if (!save.matchRatings) save.matchRatings = [];
+    const existing = save.matchRatings.find((r) => r.fixtureId === fixtureId);
+    if (existing) { existing.ratings = ratings; } else { save.matchRatings.push({ fixtureId, ratings }); }
     set({ save });
   },
 }));

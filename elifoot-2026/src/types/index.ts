@@ -333,6 +333,102 @@ export interface NewsItem {
 // ------------------------------------------------------------
 
 // ============================================================
+// Scouting
+// ============================================================
+
+export type ScoutRegion =
+  | 'brasil' | 'sul_america' | 'europa' | 'africa' | 'asia' | 'america_central';
+
+export interface Scout {
+  id: string;
+  name: string;
+  quality: 1 | 2 | 3 | 4 | 5; // afeta precisão dos relatórios
+  region: ScoutRegion;
+  status: 'idle' | 'scouting';
+  assignedTurn?: number;
+  reportDueTurn?: number;
+  wageMontly: number; // em milhares
+}
+
+export interface ScoutReport {
+  id: string;
+  scoutId: string;
+  discoveredAt: number; // turno
+  read: boolean;
+  name: string;
+  age: number;
+  position: Position;
+  estimatedOVR: number; // com erro baseado na qualidade do scout
+  estimatedPotential: number | null; // null se scout muito fraco
+  estimatedValue: number; // em milhares
+  region: ScoutRegion;
+  // Campos reais revelados apenas na contratação:
+  realOVR: number;
+  realPotential: number;
+}
+
+// ============================================================
+// Mercado de empréstimos
+// ============================================================
+
+export interface LoanOffer {
+  id: string;
+  playerId: string;
+  fromTeamId: string;   // clube que oferece o jogador
+  loanFeeMonthly: number; // valor pago pelo clube tomador em milhares/mês
+  loanUntil: number;    // temporada de retorno
+  status: 'available' | 'accepted' | 'expired';
+  offeredAt: number;    // turno
+}
+
+export interface ActiveLoan {
+  id: string;
+  playerId: string;
+  originalTeamId: string; // clube dono do jogador
+  loanedToTeamId: string; // clube onde está emprestado
+  loanFeeMonthly: number;
+  loanUntil: number; // temporada
+  canRecall: boolean;
+}
+
+// ============================================================
+// Interações com jogadores
+// ============================================================
+
+export type PlayerInteractionType =
+  | 'transfer_request'   // quer sair
+  | 'playing_time'       // quer mais minutos
+  | 'contract_demand'    // quer renovar com aumento
+  | 'praise';            // rendimento excepcional — quer reconhecimento
+
+export interface PlayerInteractionOption {
+  label: string;
+  moraleEffect: number;
+  confidenceEffect: number; // boardConfidence
+  acceptsRequest?: boolean; // true = aceita pedido de transferência
+}
+
+export interface PlayerInteraction {
+  id: string;
+  playerId: string;
+  playerName: string;
+  type: PlayerInteractionType;
+  message: string;
+  options: PlayerInteractionOption[];
+  resolved: boolean;
+  turn: number;
+}
+
+// ============================================================
+// Avaliação pós-jogo
+// ============================================================
+
+export interface MatchRating {
+  fixtureId: string;
+  ratings: Record<string, number>; // playerId -> nota 1-10
+}
+
+// ============================================================
 // Carreira do técnico
 // ============================================================
 
@@ -383,10 +479,20 @@ export interface SaveGame {
   // Patrocínios
   sponsorOffers: SponsorOffer[];
   // Carreira do técnico
-  managerReputation: number;    // 0 a 10000
-  managerXP: number;            // XP total acumulado (pode gastar em habilidades)
-  managerXPSpent: number;       // XP já gasto
-  unlockedSkills: string[];     // ids das habilidades desbloqueadas
-  boardConfidence: number;      // 0 a 100 (confiança da diretoria)
-  careerClubs: string[];        // nomes dos times que já treinou
+  managerReputation: number;
+  managerXP: number;
+  managerXPSpent: number;
+  unlockedSkills: string[];
+  boardConfidence: number;
+  careerClubs: string[];
+  // Scouting
+  scouts: Scout[];
+  scoutReports: ScoutReport[];
+  // Empréstimos
+  loanMarket: LoanOffer[];
+  activeLoans: ActiveLoan[];
+  // Interações com jogadores
+  playerInteractions: PlayerInteraction[];
+  // Avaliações pós-jogo
+  matchRatings: MatchRating[];
 }

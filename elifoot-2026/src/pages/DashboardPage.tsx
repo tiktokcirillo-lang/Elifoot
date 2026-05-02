@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
-import { ChevronRight, FastForward, Target, DollarSign, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, Star, Briefcase } from 'lucide-react';
+import { ChevronRight, FastForward, Target, DollarSign, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, Star, Briefcase, MessageSquare } from 'lucide-react';
 import { calcWeeklyCashflow } from '@/engine/financeEngine';
 import { reputationTier } from '@/data/managerSkills';
 
@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const advanceTurn = useGameStore((s) => s.advanceTurn);
   const startNewSeason = useGameStore((s) => s.startNewSeason);
   const closeGame = useGameStore((s) => s.closeGame);
+  const resolvePlayerInteraction = useGameStore((s) => s.resolvePlayerInteraction);
   const navigate = useNavigate();
 
   if (!save || !userTeam) return null;
@@ -231,6 +232,39 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Interações com jogadores */}
+      {(save.playerInteractions ?? []).filter((i) => !i.resolved).length > 0 && (
+        <div className="panel p-4 border border-yellow-500/30">
+          <h3 className="font-semibold flex items-center gap-2 mb-3">
+            <MessageSquare className="w-4 h-4 text-yellow-400" /> Jogadores querem falar
+          </h3>
+          <div className="space-y-4">
+            {(save.playerInteractions ?? []).filter((i) => !i.resolved).map((interaction) => (
+              <div key={interaction.id} className="bg-white/5 rounded-lg p-3">
+                <p className="text-sm text-white/80 mb-2">{interaction.message}</p>
+                <div className="flex flex-wrap gap-2">
+                  {interaction.options.map((opt, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => resolvePlayerInteraction(interaction.id, idx)}
+                      className={`text-xs px-3 py-1.5 rounded transition-colors ${
+                        opt.moraleEffect > 0
+                          ? 'bg-green-500/20 hover:bg-green-500/40 text-green-300'
+                          : opt.moraleEffect < 0
+                          ? 'bg-red-500/20 hover:bg-red-500/40 text-red-300'
+                          : 'bg-white/10 hover:bg-white/20 text-white/70'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Avançar dia */}
       <div className="panel p-5 flex items-center justify-between">
