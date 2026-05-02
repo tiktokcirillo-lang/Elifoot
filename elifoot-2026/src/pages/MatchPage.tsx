@@ -3,12 +3,28 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import type { MatchEvent, MatchResult, TacticalPosture, PressingLevel } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ArrowRightLeft, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { ChevronRight, ArrowRightLeft, Mic, MicOff, Volume2, VolumeX, Star } from 'lucide-react';
 import MatchField from '@/components/MatchField';
 import { soundEngine } from '@/engine/soundEngine';
 import { narratorEngine } from '@/engine/narratorEngine';
 
-type Phase = 'prematch' | 'playing' | 'halftime' | 'finished';
+type Phase = 'prematch' | 'teamtalk' | 'playing' | 'halftime' | 'finished';
+
+const TEAM_TALK_OPTIONS = [
+  { key: 'motivate', emoji: '🔥', label: 'Motivar', desc: 'Discurso inspirador — máximo empenho!', moraleBonus: 10 },
+  { key: 'calm',     emoji: '⚽', label: 'Foco',    desc: 'Trabalho sólido, jogo por jogo.',       moraleBonus: 3  },
+  { key: 'pressure', emoji: '😤', label: 'Pressionar', desc: 'Vocês têm que dar mais — cobro resultado.', moraleBonus: -5 },
+] as const;
+
+const RATING_GRADES = [
+  { value: 4, label: '4', color: 'bg-red-500/80' },
+  { value: 5, label: '5', color: 'bg-orange-500/80' },
+  { value: 6, label: '6', color: 'bg-yellow-500/80' },
+  { value: 7, label: '7', color: 'bg-yellow-400/80' },
+  { value: 8, label: '8', color: 'bg-green-500/80' },
+  { value: 9, label: '9', color: 'bg-green-400/80' },
+  { value: 10, label: '10', color: 'bg-gold-400/80' },
+];
 
 const POSTURE_LABELS: Record<TacticalPosture, string> = {
   attack:    'Ofensivo',
@@ -29,8 +45,12 @@ export default function MatchPage() {
   const simulateFirstHalf = useGameStore((s) => s.simulateFirstHalf);
   const simulateSecondHalf = useGameStore((s) => s.simulateSecondHalf);
   const setTacticalSetup = useGameStore((s) => s.setTacticalSetup);
+  const applyTeamTalk = useGameStore((s) => s.applyTeamTalk);
+  const recordMatchRating = useGameStore((s) => s.recordMatchRating);
 
   const [phase, setPhase] = useState<Phase>('prematch');
+  const [postMatchRatings, setPostMatchRatings] = useState<Record<string, number>>({});
+  const [ratingsSaved, setRatingsSaved] = useState(false);
   const [result, setResult] = useState<MatchResult | null>(null);
   const [firstHalfResult, setFirstHalfResult] = useState<MatchResult | null>(null);
   const [soundOn, setSoundOn] = useState(soundEngine.enabled);
@@ -50,8 +70,9 @@ export default function MatchPage() {
   const tactics = save?.tacticalSetup;
 
   // Iniciar partida: simula apenas o 1º tempo
-  async function startMatch() {
+  async function startMatch(moraleBonus = 0) {
     if (!fixtureId || startedRef.current || !fixture) return;
+    if (moraleBonus !== 0) applyTeamTalk(moraleBonus);
     startedRef.current = true;
     soundEngine.play('whistle');
     const r = await simulateFirstHalf(fixtureId);
@@ -224,7 +245,6 @@ export default function MatchPage() {
           <div className="flex gap-2 mb-3">
             <button
               onClick={() => setSoundOn(soundEngine.toggle())}
-              title={soundOn ? 'Desligar sons' : 'Ligar sons'}
               className="flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
             >
               {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-white/30" />}
@@ -232,7 +252,6 @@ export default function MatchPage() {
             </button>
             <button
               onClick={() => setNarratorOn(narratorEngine.toggle())}
-              title={narratorOn ? 'Desligar narrador' : 'Ligar narrador'}
               className="flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
             >
               {narratorOn ? <Mic className="w-4 h-4 text-pitch-400" /> : <MicOff className="w-4 h-4 text-white/30" />}
@@ -240,8 +259,47 @@ export default function MatchPage() {
             </button>
           </div>
 
-          <button onClick={startMatch} className="btn-primary w-full flex items-center justify-center gap-2 text-lg py-3">
-            Iniciar Partida <ChevronRight className="w-5 h-5" />
+          <button onClick={() => setPhase('teamtalk')} className="btn-primary w-full flex items-center justify-center gap-2 text-lg py-3">
+            Pronto — Team Talk <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Team Talk ─────────────────────────────────────────────
+  if (phase === 'teamtalk') {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <div className="panel p-6">
+          <div className="text-xs uppercase tracking-wider text-white/50 mb-1 text-center">Vestiário</div>
+          <div className="display-font text-2xl text-center mb-5">Discurso pré-jogo</div>
+          <div className="space-y-3 mb-6">
+            {TEAM_TALK_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => startMatch(opt.moraleBonus)}
+                className="w-full text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 p-4 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{opt.emoji}</span>
+                  <div>
+                    <div className="font-semibold text-white group-hover:text-pitch-300 transition-colors">{opt.label}</div>
+                    <div className="text-sm text-white/50">{opt.desc}</div>
+                  </div>
+                  <div className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
+                    opt.moraleBonus > 0 ? 'bg-green-500/20 text-green-400' :
+                    opt.moraleBonus < 0 ? 'bg-red-500/20 text-red-400' :
+                    'bg-white/10 text-white/40'
+                  }`}>
+                    {opt.moraleBonus > 0 ? `Moral +${opt.moraleBonus}` : opt.moraleBonus < 0 ? `Moral ${opt.moraleBonus}` : 'Neutro'}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => startMatch(0)} className="btn-ghost text-sm w-full">
+            Pular — Entrar em campo sem discurso
           </button>
         </div>
       </div>
@@ -396,16 +454,13 @@ export default function MatchPage() {
         )}
 
         {phase === 'finished' && (
-          <div className="text-center mb-4">
+          <div className="text-center mb-2">
             <div className="display-font text-3xl text-gold-500">Fim de jogo</div>
-            <div className="mt-3 grid grid-cols-3 text-xs text-white/60 max-w-md mx-auto">
-              <div>Finalizações: {result?.homeShots} - {result?.awayShots}</div>
-              <div>No alvo: {result?.homeShotsOnTarget} - {result?.awayShotsOnTarget}</div>
-              <div>Posse: {result?.homePossession}% - {100 - (result?.homePossession ?? 50)}%</div>
+            <div className="mt-2 grid grid-cols-3 text-xs text-white/60 max-w-md mx-auto gap-2">
+              <div>Finalizações<br/><span className="text-white">{result?.homeShots} - {result?.awayShots}</span></div>
+              <div>No alvo<br/><span className="text-white">{result?.homeShotsOnTarget} - {result?.awayShotsOnTarget}</span></div>
+              <div>Posse<br/><span className="text-white">{result?.homePossession}% - {100 - (result?.homePossession ?? 50)}%</span></div>
             </div>
-            <button onClick={() => navigate('/game')} className="btn-primary mt-4">
-              Voltar ao painel
-            </button>
           </div>
         )}
       </div>
@@ -424,7 +479,7 @@ export default function MatchPage() {
       {/* Narração */}
       <div className="panel p-4">
         <div className="text-sm font-semibold text-white/70 mb-2">Narração</div>
-        <ul className="space-y-1.5 max-h-96 overflow-auto">
+        <ul className="space-y-1.5 max-h-64 overflow-auto">
           <AnimatePresence initial={false}>
             {displayedEvents.map((e, idx) => (
               <motion.li
@@ -443,6 +498,63 @@ export default function MatchPage() {
           </AnimatePresence>
         </ul>
       </div>
+
+      {/* Avaliações pós-jogo */}
+      {phase === 'finished' && userTeam && fixtureId && (
+        <div className="panel p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="font-semibold flex items-center gap-2">
+              <Star className="w-4 h-4 text-gold-400" /> Avaliações dos jogadores
+            </div>
+            {ratingsSaved && <span className="text-xs text-green-400">Salvas ✓</span>}
+          </div>
+          <div className="space-y-2">
+            {userTeam.starting11.slice(0, 11).map((pid) => {
+              const player = userTeam.squad.find((p) => p.id === pid);
+              if (!player) return null;
+              const rating = postMatchRatings[pid] ?? 6;
+              return (
+                <div key={pid} className="flex items-center gap-2">
+                  <div className="w-28 sm:w-36 text-xs truncate text-white/80">{player.name}</div>
+                  <div className="flex gap-0.5 flex-1">
+                    {RATING_GRADES.map((g) => (
+                      <button
+                        key={g.value}
+                        onClick={() => setPostMatchRatings((prev) => ({ ...prev, [pid]: g.value }))}
+                        className={`flex-1 py-1 text-xs rounded transition-all font-medium ${
+                          rating === g.value
+                            ? `${g.color} text-white`
+                            : 'bg-white/5 text-white/30 hover:bg-white/10'
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            onClick={() => {
+              const defaultRatings = Object.fromEntries(
+                userTeam.starting11.slice(0, 11).map((id) => [id, postMatchRatings[id] ?? 6])
+              );
+              recordMatchRating(fixtureId, defaultRatings);
+              setRatingsSaved(true);
+            }}
+            className="btn-ghost text-xs mt-3 w-full"
+          >
+            Salvar avaliações
+          </button>
+        </div>
+      )}
+
+      {phase === 'finished' && (
+        <button onClick={() => navigate('/game')} className="btn-primary w-full">
+          Voltar ao painel
+        </button>
+      )}
     </div>
   );
 }

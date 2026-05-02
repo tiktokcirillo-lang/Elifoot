@@ -142,6 +142,8 @@ interface GameState {
   resolvePlayerInteraction: (interactionId: string, optionIndex: number) => void;
   // Avaliações pós-jogo
   recordMatchRating: (fixtureId: string, ratings: Record<string, number>) => void;
+  // Team talk
+  applyTeamTalk: (moraleBonus: number) => void;
 }
 
 // ============================================================
@@ -1748,6 +1750,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (option.confidenceEffect) {
       save.boardConfidence = Math.max(0, Math.min(100, (save.boardConfidence ?? 60) + option.confidenceEffect));
     }
+    set({ save });
+  },
+
+  // ── Team Talk ─────────────────────────────────────────────
+
+  applyTeamTalk(moraleBonus) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam) return;
+    userTeam.squad.forEach((p) => {
+      p.morale = Math.max(0, Math.min(100, p.morale + moraleBonus));
+    });
     set({ save });
   },
 

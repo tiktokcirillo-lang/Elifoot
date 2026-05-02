@@ -38,6 +38,15 @@ export default function SquadPage() {
     alert('Escalação salva.');
   }
 
+  // Última nota de cada jogador (percorre matchRatings de trás para frente)
+  const latestRatingMap: Record<string, number> = {};
+  for (let i = (save.matchRatings ?? []).length - 1; i >= 0; i--) {
+    const mr = save.matchRatings[i];
+    for (const [pid, rating] of Object.entries(mr.ratings)) {
+      if (!(pid in latestRatingMap)) latestRatingMap[pid] = rating;
+    }
+  }
+
   const grouped = POSITION_ORDER.reduce<Record<Position, Player[]>>((acc, pos) => {
     acc[pos] = userTeam.squad
       .filter((p) => p.position === pos)
@@ -96,6 +105,15 @@ export default function SquadPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-white/60">
+                    {latestRatingMap[p.id] !== undefined && (
+                      <span className={`font-bold px-1.5 py-0.5 rounded text-white ${
+                        latestRatingMap[p.id] >= 9 ? 'bg-yellow-500' :
+                        latestRatingMap[p.id] >= 7 ? 'bg-green-600' :
+                        latestRatingMap[p.id] >= 5 ? 'bg-yellow-700' : 'bg-red-600'
+                      }`} title="Nota última partida">
+                        {latestRatingMap[p.id]}
+                      </span>
+                    )}
                     <span title="Moral" className="flex items-center gap-1">
                       <Heart className="w-3 h-3" /> {p.morale}
                     </span>
