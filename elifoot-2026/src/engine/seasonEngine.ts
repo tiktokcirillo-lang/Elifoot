@@ -34,12 +34,12 @@ export function generateBoardObjectives(userTeam: Team): BoardObjective[] {
 
   if (tier === 'elite') {
     add('league_title', 'Vença o Brasileirão');
-    add('qualify_libertadores', 'Classifique-se para a Libertadores (top 6)');
+    add('qualify_libertadores', 'Classifique-se para a Libertadores (top 5)');
     add('cup_win', 'Vença a Copa do Brasil');
   } else if (tier === 'top') {
     add('league_position', 'Termine no top 4 do Brasileirão', 4);
     add('avoid_relegation', 'Evite o rebaixamento (top 16)');
-    add('qualify_libertadores', 'Classifique-se para a Libertadores (top 6)');
+    add('qualify_libertadores', 'Classifique-se para a Libertadores (top 5)');
   } else if (tier === 'mid') {
     add('league_position', 'Termine no top 10 do Brasileirão', 10);
     add('avoid_relegation', 'Evite o rebaixamento (top 16)');
@@ -81,7 +81,8 @@ export function processSeasonEnd(save: SaveGame): void {
         obj.status = copa?.championId === save.controlledTeamId ? 'achieved' : 'failed';
         break;
       case 'qualify_libertadores':
-        obj.status = userPosition > 0 && userPosition <= 6 ? 'achieved' : 'failed';
+        // 2026: G5 — top 5 vão à fase de grupos da Libertadores
+        obj.status = userPosition > 0 && userPosition <= 5 ? 'achieved' : 'failed';
         break;
     }
   });
@@ -127,22 +128,60 @@ export function processSeasonEnd(save: SaveGame): void {
     (best, curr) => (curr.player.stats.goals > (best?.player.stats.goals ?? -1) ? curr : best),
     null,
   );
-  const bolaDeOuro = allPlayers.reduce<typeof allPlayers[0] | null>(
-    (best, curr) => (curr.player.overall > (best?.player.overall ?? -1) ? curr : best),
-    null,
-  );
-  const revelacao = allPlayers
-    .filter((x) => x.player.age <= 23 && x.player.stats.appearances > 0)
-    .reduce<typeof allPlayers[0] | null>(
-      (best, curr) => (curr.player.overall > (best?.player.overall ?? -1) ? curr : best),
-      null,
-    );
 
   const userTitlesThisSeason = save.competitions.filter(
     (c) => c.championId === save.controlledTeamId,
   ).length;
 
+  // ── Sistema de votação: Bola de Ouro ────────────────────��
+  // 30 candidatos pelos melhores overall com participação >= 1 jogo
+  const VOTE_WEIGHTS = [15, 12, 10, 8, 7, 5, 4, 3, 2, 1];
+  const NUM_JOURNALISTS = 100;
+  const NUM_CANDIDATES = 30;
+
+  const candidates = [...allPlayers]
+    .filter((x) => x.player.stats.appearances > 0)
+    .sort((a, b) => {
+      // Score composto: overall + bônus por títulos + bônus por gols
+      const titleBonus = (entry: typeof a) =>
+        save.competitions.filter((c) => c.championId === entry.team.id).length * 5;
+      const scoreA = a.player.overall + titleBonus(a) + Math.floor(a.player.stats.goals * 0.3);
+      const scoreB = b.player.overall + titleBonus(b) + Math.floor(b.player.stats.goals * 0.3);
+      return scoreB - scoreA;
+    })
+    .slice(0, NUM_CANDIDATES);
+
+  // Pontuação total por índice de candidato
+  const votePoints = new Array(candidates.length).fill(0);
+  const firstPlaceVotes = new Array(candidates.length).fill(0);
+
+  const rng30 = createRng(save.season * 7777 + 13);
+  for (let j = 0; j < NUM_JOURNALISTS; j++) {
+    // Cada jornalista tem uma "preferência" levemente aleatória influenciada pelo score
+    const weights = candidates.map((_c, idx) => {
+      const base = NUM_CANDIDATES - idx; // 30 para o 1º, 1 para o último
+      const noise = rng30() * 8; // variação aleatória
+      return base + noise;
+    });
+    // Selecionar top 10 pelo peso
+    const ranked = weights
+      .map((w, i) => ({ w, i }))
+      .sort((a, b) => b.w - a.w)
+      .slice(0, 10);
+
+    ranked.forEach(({ i }, pos) => {
+      votePoints[i] += VOTE_WEIGHTS[pos];
+      if (pos === 0) firstPlaceVotes[i]++;
+    });
+  }
+
+  // Ranking final da votação
+  const voteRanking = candidates
+    .map((c, i) => ({ c, pts: votePoints[i], fp: firstPlaceVotes[i] }))
+    .sort((a, b) => b.pts - a.pts || b.fp - a.fp);
+
   const award: SeasonAward = { season: save.season };
+
   if (topScorer && topScorer.player.stats.goals > 0) {
     award.artilheiro = {
       playerName: topScorer.player.name,
@@ -150,21 +189,54 @@ export function processSeasonEnd(save: SaveGame): void {
       goals: topScorer.player.stats.goals,
     };
   }
-  if (bolaDeOuro) {
+
+  // Bola de Ouro — vencedor da votação
+  if (voteRanking.length > 0) {
+    const winner = voteRanking[0].c;
     award.boladeOuro = {
-      playerName: bolaDeOuro.player.name,
-      teamName: bolaDeOuro.team.name,
-      overall: bolaDeOuro.player.overall,
+      playerName: winner.player.name,
+      teamName: winner.team.name,
+      overall: winner.player.overall,
+      position: winner.player.position,
+      totalVotes: voteRanking[0].pts,
+      firstPlaceVotes: voteRanking[0].fp,
     };
+    // Top 5 da votação para exibição
+    award.topVoters = voteRanking.slice(0, 5).map((v) => ({
+      playerName: v.c.player.name,
+      teamName: v.c.team.name,
+      points: v.pts,
+    }));
   }
-  if (revelacao) {
+
+  // Troféu Kopa (melhor jogador sub-21 com aparições)
+  const kopaCandidate = [...allPlayers]
+    .filter((x) => x.player.age <= 21 && x.player.stats.appearances > 0)
+    .sort((a, b) => b.player.overall - a.player.overall)[0];
+  if (kopaCandidate) {
     award.revelacao = {
-      playerName: revelacao.player.name,
-      teamName: revelacao.team.name,
-      overall: revelacao.player.overall,
-      age: revelacao.player.age,
+      playerName: kopaCandidate.player.name,
+      teamName: kopaCandidate.team.name,
+      overall: kopaCandidate.player.overall,
+      age: kopaCandidate.player.age,
+      position: kopaCandidate.player.position,
     };
   }
+
+  // Troféu Yashin (melhor goleiro com aparições)
+  const yashinCandidate = [...allPlayers]
+    .filter((x) => x.player.position === 'GK' && x.player.stats.appearances > 0)
+    .sort((a, b) => b.player.overall - a.player.overall)[0];
+  if (yashinCandidate) {
+    award.melhorGoleiro = {
+      playerName: yashinCandidate.player.name,
+      teamName: yashinCandidate.team.name,
+      overall: yashinCandidate.player.overall,
+      age: yashinCandidate.player.age,
+      position: 'GK',
+    };
+  }
+
   award.melhorTecnico = {
     managerName: save.managerName,
     teamName: userTeam?.name ?? '',
@@ -242,6 +314,7 @@ export function startNewSeason(save: SaveGame): void {
       p.age += 1;
       p.stats = { appearances: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, minutesPlayed: 0 };
       p.yellowCardsInComp = {};
+      p.appearancesInComp = {};
       p.fitness = clamp(p.fitness + 10, 60, 100);
       p.morale = 75;
       p.injuredUntil = undefined;

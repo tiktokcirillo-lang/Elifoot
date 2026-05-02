@@ -111,12 +111,25 @@ export interface HallOfFameEntry {
   championName: string;
 }
 
+export interface AwardWinner {
+  playerName: string;
+  teamName: string;
+  overall: number;
+  age?: number;
+  goals?: number;
+  position?: string;
+  totalVotes?: number;
+  firstPlaceVotes?: number;
+}
+
 export interface SeasonAward {
   season: number;
   artilheiro?: { playerName: string; teamName: string; goals: number };
-  boladeOuro?: { playerName: string; teamName: string; overall: number };
-  revelacao?: { playerName: string; teamName: string; overall: number; age: number };
+  boladeOuro?: AwardWinner;
+  revelacao?: AwardWinner; // Troféu Kopa (sub-21)
+  melhorGoleiro?: AwardWinner; // Troféu Yashin
   melhorTecnico?: { managerName: string; teamName: string; titulos: number };
+  topVoters?: { playerName: string; teamName: string; points: number }[]; // top 5 da votação
 }
 
 // ============================================================
@@ -158,6 +171,7 @@ export interface Player {
   fitness: number; // 0 a 100
   injuredUntil?: number; // turno em que volta
   yellowCardsInComp: Record<string, number>; // por competição
+  appearancesInComp: Record<string, number>; // jogos disputados por competição (para regra dos 12 jogos)
   contractUntil: number; // ano
   wageMonthly: number; // em milhares
   marketValue: number; // em milhares

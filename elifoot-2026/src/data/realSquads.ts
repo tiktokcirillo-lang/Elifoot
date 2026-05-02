@@ -42,6 +42,7 @@ function mkPlayer(
     fitness: 85,
     injuredUntil: undefined,
     yellowCardsInComp: {},
+    appearancesInComp: {},
     contractUntil: season + 2,
     wageMonthly: Math.round(overall * 28),
     marketValue: Math.round(overall * 180),

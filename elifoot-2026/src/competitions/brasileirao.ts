@@ -160,12 +160,37 @@ export function applyResultToStandings(
 // Ordenação da tabela: pontos, vitórias, saldo, gols pró
 // ============================================================
 
+// Critério de desempate por liga:
+// 'goal_diff' = saldo de gols primeiro (Premier, Bundesliga, Ligue 1, Brasileirão)
+// 'head_to_head' = confronto direto primeiro (La Liga, Serie A)
+export type TiebreakerRule = 'goal_diff' | 'head_to_head';
+
+function tiebreakerForComp(compId: string): TiebreakerRule {
+  if (compId.startsWith('la_liga') || compId.startsWith('serie_a')) return 'head_to_head';
+  return 'goal_diff';
+}
+
 export function sortStandings(
   standings: CompetitionStanding[],
   teams: Team[],
+  compId?: string,
+  fixtures?: Fixture[],
 ): CompetitionStanding[] {
-  return [...standings].sort((a, b) => {
+  const rule = compId ? tiebreakerForComp(compId) : 'goal_diff';
+
+  const sorted = [...standings].sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
+
+    if (rule === 'head_to_head' && fixtures) {
+      // Confronto direto (pontos e saldo nos jogos entre si)
+      const h2hA = headToHeadPoints(a.teamId, b.teamId, fixtures);
+      const h2hB = headToHeadPoints(b.teamId, a.teamId, fixtures);
+      if (h2hA !== h2hB) return h2hB - h2hA;
+      const gdA = headToHeadGoalDiff(a.teamId, b.teamId, fixtures);
+      const gdB = headToHeadGoalDiff(b.teamId, a.teamId, fixtures);
+      if (gdA !== gdB) return gdB - gdA;
+    }
+
     if (b.wins !== a.wins) return b.wins - a.wins;
     if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
     if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
@@ -173,4 +198,33 @@ export function sortStandings(
     const tb = teams.find((t) => t.id === b.teamId)?.name ?? '';
     return ta.localeCompare(tb);
   });
+  return sorted;
+}
+
+function headToHeadPoints(teamA: string, teamB: string, fixtures: Fixture[]): number {
+  let pts = 0;
+  for (const f of fixtures) {
+    if (!f.played || !f.result) continue;
+    if (f.homeTeamId === teamA && f.awayTeamId === teamB) {
+      if (f.result.homeGoals > f.result.awayGoals) pts += 3;
+      else if (f.result.homeGoals === f.result.awayGoals) pts += 1;
+    } else if (f.homeTeamId === teamB && f.awayTeamId === teamA) {
+      if (f.result.awayGoals > f.result.homeGoals) pts += 3;
+      else if (f.result.homeGoals === f.result.awayGoals) pts += 1;
+    }
+  }
+  return pts;
+}
+
+function headToHeadGoalDiff(teamA: string, teamB: string, fixtures: Fixture[]): number {
+  let gd = 0;
+  for (const f of fixtures) {
+    if (!f.played || !f.result) continue;
+    if (f.homeTeamId === teamA && f.awayTeamId === teamB) {
+      gd += f.result.homeGoals - f.result.awayGoals;
+    } else if (f.homeTeamId === teamB && f.awayTeamId === teamA) {
+      gd += f.result.awayGoals - f.result.homeGoals;
+    }
+  }
+  return gd;
 }

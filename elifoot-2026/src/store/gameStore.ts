@@ -43,6 +43,33 @@ export function isTransferWindowOpen(currentTurn: number): boolean {
   return (currentTurn >= 1 && currentTurn <= 28) || (currentTurn >= 133 && currentTurn <= 161);
 }
 
+// Regra dos 12 jogos (2026): jogador só pode ser transferido entre clubes da Série A
+// se tiver disputado no máximo 12 partidas pelo clube vendedor no Brasileirão da temporada.
+export function isEligibleForSerieATransfer(
+  playerId: string,
+  save: SaveGame,
+  sellerTeamId: string,
+  buyerTeamId: string,
+): boolean {
+  // Só se aplica na janela de meio de temporada (turnos 133-161)
+  if (!(save.currentTurn >= 133 && save.currentTurn <= 161)) return true;
+
+  const brasileirao = save.competitions.find((c) => c.format === 'round_robin');
+  if (!brasileirao) return true;
+
+  // Ambos os times precisam estar no Brasileirão
+  const sellerInBR = brasileirao.teamIds.includes(sellerTeamId);
+  const buyerInBR = brasileirao.teamIds.includes(buyerTeamId);
+  if (!sellerInBR || !buyerInBR) return true;
+
+  const seller = save.teams.find((t) => t.id === sellerTeamId);
+  const player = seller?.squad.find((p) => p.id === playerId);
+  if (!player) return false;
+
+  const appearances = (player.appearancesInComp ?? {})[brasileirao.id] ?? 0;
+  return appearances <= 12;
+}
+
 // Times do estado de São Paulo elegíveis para o Paulistão
 const SP_TEAM_IDS = new Set(['pal', 'cor', 'sao', 'rbb']);
 
@@ -128,7 +155,14 @@ function updateStatsFromFixture(teams: Team[], fixture: Fixture): void {
   [home, away].forEach((team) => {
     team.starting11.slice(0, 11).forEach((pid) => {
       const p = team.squad.find((pl) => pl.id === pid);
-      if (p) { p.stats.appearances++; p.stats.minutesPlayed += 90; }
+      if (p) {
+        p.stats.appearances++;
+        p.stats.minutesPlayed += 90;
+        // Rastreia aparições por competição (regra dos 12 jogos da Série A)
+        if (!p.appearancesInComp) p.appearancesInComp = {};
+        p.appearancesInComp[fixture.competitionId] =
+          (p.appearancesInComp[fixture.competitionId] ?? 0) + 1;
+      }
     });
   });
 
@@ -686,6 +720,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         const ut = loaded.teams.find((t) => t.id === loaded.controlledTeamId);
         loaded.careerClubs = ut ? [ut.name] : [];
       }
+      // Compat: inicializa appearancesInComp em jogadores antigos
+      loaded.teams.forEach((t) => t.squad.forEach((p) => {
+        if (!p.appearancesInComp) p.appearancesInComp = {};
+      }));
       set({ save: loaded });
     }
   },
@@ -899,7 +937,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           targetFixture.awayTeamId,
           result,
         );
-        comp.standings = sortStandings(comp.standings, save.teams);
+        comp.standings = sortStandings(comp.standings, save.teams, comp.id, comp.fixtures);
       }
     }
 
@@ -1033,7 +1071,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           targetFixture.awayTeamId,
           combined,
         );
-        comp.standings = sortStandings(comp.standings, save.teams);
+        comp.standings = sortStandings(comp.standings, save.teams, comp.id, comp.fixtures);
       }
     }
 
@@ -1159,6 +1197,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     );
     const bid = listing?.bids.find((b) => b.id === bidId);
     if (!listing || !bid) return;
+
+    // Regra dos 12 jogos: bloqueia transferência doméstica mid-season se elegibilidade violada
+    if (!isEligibleForSerieATransfer(listing.playerId, save, listing.fromTeamId, bid.fromTeamId)) {
+      pushNews(save, {
+        type: 'transfer',
+        title: 'Transferência bloqueada',
+        body: 'O jogador disputou mais de 12 partidas pelo Brasileirão e não pode ser transferido para outro clube da Série A nesta janela.',
+      });
+      set({ save });
+      return;
+    }
 
     const player = save.teams.flatMap((t) => t.squad).find((p) => p.id === listing.playerId);
     executeTransfer(listing, bid, save);
