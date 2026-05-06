@@ -361,18 +361,26 @@ export function processSeasonEnd(save: SaveGame): void {
   }
 
   // ── Verificar objetivos críticos para risco de demissão ───
-  const criticalFailed = save.boardObjectives.some(
-    (o) =>
-      (o.type === 'avoid_relegation' || o.type === 'league_title') &&
-      o.status === 'failed',
+  // Vencer qualquer título protege o técnico de demissão imediata
+  const wonTitleThisSeason = userTitlesThisSeason > 0;
+  // Só rebaixamento é falha crítica; não ganhar o título do Brasileiro é tolerado se houver outros troféus
+  const relegationFailed = save.boardObjectives.some(
+    (o) => o.type === 'avoid_relegation' && o.status === 'failed',
   );
-  if (criticalFailed) {
+  // Falha total: nenhum objetivo cumprido E confiança baixa (sem títulos de compensação)
+  const achievedAny = save.boardObjectives.some((o) => o.status === 'achieved');
+  const totalFailure = !achievedAny && !wonTitleThisSeason;
+
+  const criticalFailed = relegationFailed || totalFailure;
+
+  if (criticalFailed && !wonTitleThisSeason) {
     save.managerWarnings = (save.managerWarnings ?? 0) + 1;
     if (save.managerWarnings >= 2 || save.boardConfidence < 15) {
       save.dismissed = true;
     }
   } else {
-    save.managerWarnings = 0;
+    // Títulos ou objetivos cumpridos zeram avisos
+    if (wonTitleThisSeason || achievedAny) save.managerWarnings = 0;
   }
 }
 
