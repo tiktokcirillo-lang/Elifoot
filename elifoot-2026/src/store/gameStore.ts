@@ -15,6 +15,8 @@ import type {
   TransferBid,
   Formation,
   Infrastructure,
+  ManagerJobOffer,
+  PressConferenceOption,
 } from '@/types';
 import { SPONSOR_BRANDS } from '@/data/sponsors';
 import { MANAGER_SKILLS } from '@/data/managerSkills';
@@ -26,6 +28,7 @@ import {
 } from '@/competitions/brasileirao';
 import { createCopaDoBrasil, createGroupsKnockout, createPaulistao } from '@/competitions/knockoutFormats';
 import { buildBrasileiraoTeams } from '@/data/brasileiraoTeams';
+import { buildSerieBTeams } from '@/data/serieBTeams';
 import { buildExtraTeams, LIBERTADORES_EXTRA_SEEDS, CHAMPIONS_EXTRA_SEEDS, PAULISTAO_EXTRA_SEEDS, SULAMERICANA_EXTRA_SEEDS, MUNDIAL_EXTRA_SEEDS, COPA_MUNDO_SEEDS } from '@/data/extraTeams';
 import { persistSave, loadSave } from '@/db/database';
 import { resolveKnockoutsForSave } from '@/engine/knockoutEngine';
@@ -149,6 +152,13 @@ interface GameState {
   applyTeamTalk: (moraleBonus: number) => void;
   // Infraestrutura
   upgradeInfrastructure: (type: keyof Infrastructure) => void;
+  // Coletiva de imprensa
+  applyPressConferenceEffects: (effects: PressConferenceOption) => void;
+  // Propostas de emprego
+  acceptJobOffer: (offerId: string) => void;
+  rejectJobOffer: (offerId: string) => void;
+  // Counter-oferta de transferência
+  acceptCounterOffer: (listingId: string, bidId: string) => void;
 }
 
 // ============================================================
@@ -272,6 +282,8 @@ function generateInitialCompetitions(
   previousBrasileiraoStandings?: CompetitionStanding[],
 ): Competition[] {
   const brTeamIds = teams.map((t) => t.id);
+  // Série B teams in allTeams
+  const serieBTeamIds = allTeams.filter((t) => t.division === 'B').map((t) => t.id);
 
   // ── Brasileirão ────────────────────────────────────────────
   const brasileirao = createBrasileirao({
@@ -421,6 +433,21 @@ function generateInitialCompetitions(
 
   const result: Competition[] = [brasileirao, copa, libertadores, sulAmericana, mundial, champions];
 
+  // ── Série B ───────────────────────────────────────────────
+  if (serieBTeamIds.length >= 4) {
+    const serieB = createBrasileirao({
+      teamIds: serieBTeamIds,
+      season,
+      startTurn: 2,
+      turnsBetweenRounds: 7,
+      seed: season * 1000 + 20,
+      id: `serie_b_${season}`,
+      name: 'Campeonato Brasileiro Série B',
+      shortName: 'Série B',
+    });
+    result.push(serieB);
+  }
+
   // ── Copa do Mundo (a cada 4 temporadas: 2026, 2030, 2034…) ──
   const isWorldCupSeason = (season - 2026) % 4 === 0;
   if (isWorldCupSeason) {
@@ -541,6 +568,19 @@ function processAITransfers(save: SaveGame): void {
       status: 'pending',
     });
   });
+
+  // IA contra-oferta ou rejeita ofertas do user abaixo do limiar (70-89%)
+  market
+    .filter((l) => l.status === 'open' && l.fromTeamId !== save.controlledTeamId)
+    .forEach((listing) => {
+      const userBid = listing.bids.find((b) => b.fromTeamId === save.controlledTeamId && b.status === 'pending');
+      if (userBid && userBid.amount < listing.askingPrice * 0.9 && userBid.amount >= listing.askingPrice * 0.6) {
+        if (Math.random() < 0.4) {
+          userBid.status = 'countered';
+          userBid.counterAmount = Math.round(listing.askingPrice * (0.88 + Math.random() * 0.07));
+        }
+      }
+    });
 
   // IA aceita automaticamente ofertas >= 90% do preço pedido (era 100%)
   market
@@ -715,7 +755,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       ...MUNDIAL_EXTRA_SEEDS,
       ...COPA_MUNDO_SEEDS,
     ]);
-    const allTeams = [...brTeams, ...extraTeams];
+    const serieBTeams = buildSerieBTeams();
+    const allTeams = [...brTeams, ...extraTeams, ...serieBTeams];
     const resolvedUserTeam = allTeams.find((t) => t.id === teamId);
     if (!resolvedUserTeam) throw new Error('Time não encontrado após setup');
 
@@ -766,6 +807,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       fanSatisfaction: 50,
       infrastructure: { training: 0, medical: 0, youth: 0 },
       internationalAbsences: [],
+      squadMorale: 70,
+      managerJobOffers: [],
     };
 
     pushNews(save, {
@@ -824,6 +867,19 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (loaded.fanSatisfaction === undefined) loaded.fanSatisfaction = 50;
       if (!loaded.infrastructure) loaded.infrastructure = { training: 0, medical: 0, youth: 0 };
       if (!loaded.internationalAbsences) loaded.internationalAbsences = [];
+      if (loaded.squadMorale === undefined) loaded.squadMorale = 70;
+      if (!loaded.managerJobOffers) loaded.managerJobOffers = [];
+      // Compat: add nationality to existing players
+      loaded.teams.forEach((t) => t.squad.forEach((p) => {
+        if (!p.nationality) p.nationality = 'BR';
+      }));
+      // Compat: add Série B teams if not present
+      const hasSerieBTeams = loaded.teams.some((t) => t.division === 'B');
+      if (!hasSerieBTeams) {
+        const newSerieBTeams = buildSerieBTeams();
+        const existingIds = new Set(loaded.teams.map((t) => t.id));
+        newSerieBTeams.filter((t) => !existingIds.has(t.id)).forEach((t) => loaded.teams.push(t));
+      }
       set({ save: loaded });
     }
   },
@@ -1071,12 +1127,77 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // Fan satisfaction semanal (baseado na posição no Brasileirão)
     if (save.currentTurn % 7 === 0) {
-      const brasileiraoFan = save.competitions.find((c) => c.format === 'round_robin');
+      const brasileiraoFan = save.competitions.find((c) => c.id.startsWith('brasileirao_'));
       if (brasileiraoFan) {
         const standings = sortStandings(brasileiraoFan.standings, save.teams, brasileiraoFan.id, brasileiraoFan.fixtures);
         const pos = standings.findIndex((s) => s.teamId === save.controlledTeamId) + 1;
         const fanDelta = pos === 0 ? 0 : pos <= 4 ? 2 : pos >= 17 ? -3 : 0;
         save.fanSatisfaction = Math.max(0, Math.min(100, (save.fanSatisfaction ?? 50) + fanDelta));
+      }
+    }
+
+    // Moral coletivo do elenco (a cada 7 turnos)
+    if (save.currentTurn % 7 === 0) {
+      const userTeamMorale = save.teams.find((t) => t.id === save.controlledTeamId);
+      if (userTeamMorale && userTeamMorale.squad.length > 0) {
+        const avgMorale = userTeamMorale.squad.reduce((s, p) => s + p.morale, 0) / userTeamMorale.squad.length;
+        save.squadMorale = Math.round(
+          avgMorale * 0.6 +
+          (save.fanSatisfaction ?? 50) * 0.25 +
+          (save.boardConfidence ?? 60) * 0.15
+        );
+        save.squadMorale = Math.max(0, Math.min(100, save.squadMorale));
+      }
+    }
+
+    // Base: gera novo jovem a cada 35 turnos
+    if (save.currentTurn % 35 === 0 && !save.dismissed) {
+      const youthLevel = save.infrastructure?.youth ?? 0;
+      const baseSeed = save.season * 10000 + save.currentTurn;
+      const newYouth = generateYouthPlayer(baseSeed, save.season);
+      if (youthLevel >= 1) newYouth.potential = Math.min(90, (newYouth.potential ?? newYouth.overall) + youthLevel * 5);
+      if (!save.youthPlayers) save.youthPlayers = [];
+      if (save.youthPlayers.length < 8) {
+        save.youthPlayers.push(newYouth);
+        pushNews(save, {
+          type: 'general',
+          title: `Nova revelação na base: ${newYouth.name}`,
+          body: `${newYouth.name} (${newYouth.position}, ${newYouth.age} anos, OVR ${newYouth.overall}) chegou à base do clube.`,
+        });
+      }
+    }
+
+    // Propostas de emprego (a cada 42 turnos)
+    if (save.currentTurn % 42 === 0 && !save.dismissed) {
+      if (!save.managerJobOffers) save.managerJobOffers = [];
+      save.managerJobOffers = save.managerJobOffers.filter((o) => o.expiresAt > save.currentTurn);
+      if (save.managerJobOffers.length < 3) {
+        const rep = save.managerReputation ?? 0;
+        const aiTeams = save.teams.filter(
+          (t) => !t.isUserControlled && t.id !== save.controlledTeamId && (!t.division || t.division === 'A'),
+        );
+        if (aiTeams.length > 0) {
+          const rng2 = Math.random;
+          const candidate = aiTeams[Math.floor(rng2() * aiTeams.length)];
+          if (!save.managerJobOffers.some((o) => o.teamId === candidate.id)) {
+            const offer: ManagerJobOffer = {
+              id: nanoid(8),
+              teamId: candidate.id,
+              teamName: candidate.name,
+              salary: Math.round(candidate.reputation * 2 + 50),
+              transferBudget: candidate.budget,
+              reputationRequired: Math.max(0, rep - 500),
+              expiresAt: save.currentTurn + 28,
+              penaltyIfMidSeason: save.currentTurn > 28 && save.currentTurn < 250,
+            };
+            save.managerJobOffers.push(offer);
+            pushNews(save, {
+              type: 'general',
+              title: `Proposta de emprego: ${candidate.name}`,
+              body: `${candidate.name} quer você como técnico. Salário: R$ ${offer.salary}k/mês. Acesse Carreira para avaliar.`,
+            });
+          }
+        }
       }
     }
 
@@ -1624,10 +1745,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     ];
     const missingExtras = buildExtraTeams(allExtraSeeds.filter((s) => !knownIds.has(s.id)));
     save.teams.push(...missingExtras);
+    // Garante que times da Série B estejam em save.teams
+    buildSerieBTeams().filter((t) => !knownIds.has(t.id)).forEach((t) => save.teams.push(t));
 
-    // Recria competições com os mesmos times + extras
-    const brTeamIds = new Set(['fla','pal','cor','sao','flu','atm','bot','cru','gre','int','bah','for','ath','vas','rbb','cri','jvt','cui','gpa','ava']);
-    const brTeams = save.teams.filter((t) => brTeamIds.has(t.id));
+    // Recria competições respeitando promoção/rebaixamento
+    const ORIGINAL_SERIE_A = new Set(['fla','pal','cor','sao','flu','atm','bot','cru','gre','int','bah','for','ath','vas','rbb','cri','jvt','cui','gpa','ava']);
+    // Série A: times originais sem division='B', ou times promovidos (division='A')
+    const brTeams = save.teams.filter(
+      (t) => t.division === 'A' || (ORIGINAL_SERIE_A.has(t.id) && t.division !== 'B'),
+    );
     const comps = generateInitialCompetitions(
       brTeams,
       save.teams,
@@ -1749,6 +1875,114 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!state.save) return;
     const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
     save.trainingPlan = plan;
+    set({ save });
+  },
+
+  // ── Coletiva de imprensa ──────────────────────────────────
+
+  applyPressConferenceEffects(effects) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    save.boardConfidence = Math.max(0, Math.min(100, (save.boardConfidence ?? 60) + effects.boardEffect));
+    save.fanSatisfaction = Math.max(0, Math.min(100, (save.fanSatisfaction ?? 50) + effects.fanEffect));
+    if (effects.moraleEffect !== 0) {
+      const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+      userTeam?.squad.forEach((p) => {
+        p.morale = Math.max(0, Math.min(100, p.morale + effects.moraleEffect));
+      });
+    }
+    set({ save });
+  },
+
+  // ── Propostas de emprego ──────────────────────────────────
+
+  acceptJobOffer(offerId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const offer = (save.managerJobOffers ?? []).find((o) => o.id === offerId);
+    if (!offer) return;
+    const newTeam = save.teams.find((t) => t.id === offer.teamId);
+    if (!newTeam) return;
+    const oldTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (oldTeam) oldTeam.isUserControlled = false;
+    newTeam.isUserControlled = true;
+    save.controlledTeamId = offer.teamId;
+    save.dismissed = false;
+    save.managerWarnings = 0;
+    save.boardObjectives = generateBoardObjectives(newTeam);
+    save.managerJobOffers = [];
+    save.sponsorOffers = save.sponsorOffers
+      .map((o) => o.status === 'active' ? { ...o, status: 'expired' as const } : o)
+      .filter((o) => o.status !== 'pending');
+    if (!save.careerClubs) save.careerClubs = [];
+    if (!save.careerClubs.includes(newTeam.name)) save.careerClubs.push(newTeam.name);
+    pushNews(save, {
+      type: 'general',
+      title: `Você aceita a proposta do ${newTeam.name}!`,
+      body: `Novo clube, nova missão. Salário: R$ ${offer.salary}k/mês. Boa sorte, ${save.managerName}!`,
+    });
+    set({ save });
+  },
+
+  rejectJobOffer(offerId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    save.managerJobOffers = (save.managerJobOffers ?? []).filter((o) => o.id !== offerId);
+    set({ save });
+  },
+
+  // ── Counter-oferta de transferência ───────────────────────
+
+  acceptCounterOffer(listingId, bidId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const listing = save.transferMarket.find((l) => l.id === listingId);
+    const bid = listing?.bids.find((b) => b.id === bidId && b.status === 'countered');
+    if (!listing || !bid || bid.counterAmount == null) return;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam || userTeam.budget < bid.counterAmount) return;
+    bid.amount = bid.counterAmount;
+    bid.status = 'pending';
+    const player = save.teams.flatMap((t) => t.squad).find((p) => p.id === listing.playerId);
+    executeTransfer(listing, bid, save);
+    if (player) recordTransfer(save, player.name, bid.counterAmount, false);
+    pushNews(save, {
+      type: 'transfer',
+      title: 'Contra-oferta aceita',
+      body: `${player?.name ?? 'Jogador'} contratado por R$ ${(bid.counterAmount / 1000).toFixed(1)}M.`,
+    });
+    set({ save });
+  },
+
+  // ── Infraestrutura ────────────────────────────────────────
+
+  upgradeInfrastructure(type) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam) return;
+
+    const COSTS: Record<keyof Infrastructure, [number, number, number]> = {
+      training: [500, 1500, 3000],
+      medical:  [400, 1200, 2500],
+      youth:    [600, 2000, 4000],
+    };
+    const currentLevel = save.infrastructure[type] as 0 | 1 | 2 | 3;
+    if (currentLevel >= 3) return;
+    const cost: number = COSTS[type][currentLevel as 0 | 1 | 2];
+    if (userTeam.budget < cost) return;
+    userTeam.budget -= cost;
+    (save.infrastructure[type] as number)++;
+    pushNews(save, {
+      type: 'finance',
+      title: `Infraestrutura melhorada: ${type}`,
+      body: `Nível ${save.infrastructure[type]} atingido. Investimento: R$ ${(cost / 1000).toFixed(1)}M.`,
+    });
     set({ save });
   },
 
@@ -1951,30 +2185,4 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ save });
   },
 
-  // ── Infraestrutura ────────────────────────────────────────
-
-  upgradeInfrastructure(type) {
-    const COSTS: Record<keyof Infrastructure, [number, number, number]> = {
-      training: [500, 1500, 3000],
-      medical:  [400, 1200, 2500],
-      youth:    [600, 2000, 4000],
-    };
-    const state = get();
-    if (!state.save) return;
-    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
-    if (!save.infrastructure) save.infrastructure = { training: 0, medical: 0, youth: 0 };
-    const currentLevel = save.infrastructure[type] as 0 | 1 | 2 | 3;
-    if (currentLevel >= 3) return;
-    const cost: number = COSTS[type][currentLevel as 0 | 1 | 2];
-    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
-    if (!userTeam || userTeam.budget < cost) {
-      pushNews(save, { type: 'finance', title: 'Budget insuficiente', body: `Necessário R$ ${cost}k para melhorar a infraestrutura.` });
-      set({ save }); return;
-    }
-    userTeam.budget -= cost;
-    (save.infrastructure[type] as number)++;
-    const NAMES: Record<keyof Infrastructure, string> = { training: 'Centro de Treinamento', medical: 'Departamento Médico', youth: 'Academia de Base' };
-    pushNews(save, { type: 'general', title: `${NAMES[type]} melhorado`, body: `Instalação agora no nível ${save.infrastructure[type]}/3.` });
-    set({ save });
-  },
 }));

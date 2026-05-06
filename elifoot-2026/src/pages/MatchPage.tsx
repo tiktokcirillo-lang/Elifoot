@@ -9,7 +9,7 @@ import { soundEngine } from '@/engine/soundEngine';
 import { narratorEngine } from '@/engine/narratorEngine';
 import { getRivalry } from '@/data/rivalries';
 
-type Phase = 'prematch' | 'teamtalk' | 'playing' | 'halftime' | 'finished';
+type Phase = 'prematch' | 'teamtalk' | 'playing' | 'halftime' | 'finished' | 'press';
 
 const TEAM_TALK_OPTIONS = [
   { key: 'motivate', emoji: '🔥', label: 'Motivar', desc: 'Discurso inspirador — máximo empenho!', moraleBonus: 10 },
@@ -48,6 +48,7 @@ export default function MatchPage() {
   const setTacticalSetup = useGameStore((s) => s.setTacticalSetup);
   const applyTeamTalk = useGameStore((s) => s.applyTeamTalk);
   const recordMatchRating = useGameStore((s) => s.recordMatchRating);
+  const applyPressConferenceEffects = useGameStore((s) => s.applyPressConferenceEffects);
 
   const [phase, setPhase] = useState<Phase>('prematch');
   const [postMatchRatings, setPostMatchRatings] = useState<Record<string, number>>({});
@@ -61,6 +62,7 @@ export default function MatchPage() {
   const [running, setRunning] = useState(false);
   const [halftimeSubs, setHalftimeSubs] = useState<{ outId: string; inId: string }[]>([]);
   const [subOut, setSubOut] = useState<string | null>(null);
+  const [pressAnswered, setPressAnswered] = useState<boolean[]>([false, false]);
   const [latestEvent, setLatestEvent] = useState<MatchEvent | undefined>();
   const startedRef = useRef(false);
 
@@ -495,7 +497,7 @@ export default function MatchPage() {
           homeColor={home.primaryColor}
           awayColor={away.primaryColor}
           isUserHome={fixture.homeTeamId === save.controlledTeamId}
-          phase={phase}
+          phase={phase === 'press' ? 'finished' : phase}
         />
       </div>
 
@@ -574,12 +576,118 @@ export default function MatchPage() {
       )}
 
       {phase === 'finished' && (
-        <button onClick={() => navigate('/game')} className="btn-primary w-full">
-          Voltar ao painel
+        <button onClick={() => setPhase('press')} className="btn-primary w-full">
+          Coletiva de imprensa →
         </button>
       )}
+
+      {phase === 'press' && result && (() => {
+        const isUserHome = fixture.homeTeamId === save.controlledTeamId;
+        const userGoals = isUserHome ? result.homeGoals : result.awayGoals;
+        const oppGoals  = isUserHome ? result.awayGoals : result.homeGoals;
+        const won = userGoals > oppGoals;
+        const drew = userGoals === oppGoals;
+
+        const PRESS_QUESTIONS = getPressQuestions(won, drew);
+
+        return (
+          <div className="panel p-5 space-y-4">
+            <div className="text-xs uppercase tracking-wider text-white/50 mb-1">Coletiva de Imprensa</div>
+            <div className="display-font text-xl mb-2">Os jornalistas querem sua palavra</div>
+            {PRESS_QUESTIONS.map((q, qi) => (
+              <div key={qi} className={`space-y-2 ${pressAnswered[qi] ? 'opacity-50' : ''}`}>
+                <div className="text-sm text-white/80 font-medium">{q.question}</div>
+                {q.options.map((opt, oi) => (
+                  <button
+                    key={oi}
+                    disabled={pressAnswered[qi]}
+                    onClick={() => {
+                      applyPressConferenceEffects(opt);
+                      setPressAnswered((prev) => { const n = [...prev]; n[qi] = true; return n; });
+                    }}
+                    className="w-full text-left text-sm px-4 py-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <div className="font-medium">{opt.label}</div>
+                    <div className="text-xs text-white/40 mt-0.5 flex gap-3">
+                      {opt.boardEffect !== 0 && <span className={opt.boardEffect > 0 ? 'text-blue-400' : 'text-red-400'}>Diretoria {opt.boardEffect > 0 ? `+${opt.boardEffect}` : opt.boardEffect}</span>}
+                      {opt.fanEffect !== 0 && <span className={opt.fanEffect > 0 ? 'text-green-400' : 'text-red-400'}>Torcida {opt.fanEffect > 0 ? `+${opt.fanEffect}` : opt.fanEffect}</span>}
+                      {opt.moraleEffect !== 0 && <span className={opt.moraleEffect > 0 ? 'text-yellow-400' : 'text-red-400'}>Moral {opt.moraleEffect > 0 ? `+${opt.moraleEffect}` : opt.moraleEffect}</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ))}
+            {pressAnswered.every(Boolean) && (
+              <button onClick={() => navigate('/game')} className="btn-primary w-full mt-2">
+                Voltar ao painel
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
+}
+
+function getPressQuestions(won: boolean, drew: boolean) {
+  if (won) {
+    return [
+      {
+        question: 'Você está satisfeito com o desempenho da equipe hoje?',
+        options: [
+          { label: 'Sim, a equipe foi brilhante. Estamos no caminho certo!', boardEffect: 5, fanEffect: 8, moraleEffect: 5 },
+          { label: 'Vitória importante, mas ainda temos muito a melhorar.', boardEffect: 3, fanEffect: 3, moraleEffect: 2 },
+          { label: 'Foi uma atuação medíocre. Exijo mais dos meus jogadores.', boardEffect: 0, fanEffect: -2, moraleEffect: -5 },
+        ],
+      },
+      {
+        question: 'Como você avalia as chances de título agora?',
+        options: [
+          { label: 'Focamos jogo a jogo — sem falar em título ainda.', boardEffect: 5, fanEffect: 4, moraleEffect: 3 },
+          { label: 'Estamos em boa posição e acreditamos no objetivo!', boardEffect: 3, fanEffect: 10, moraleEffect: 5 },
+          { label: 'Esse elenco não está pronto para brigar por título.', boardEffect: -5, fanEffect: -5, moraleEffect: -8 },
+        ],
+      },
+    ];
+  } else if (drew) {
+    return [
+      {
+        question: 'O empate foi justo?',
+        options: [
+          { label: 'Sim, o adversário foi forte. Um ponto fora de casa é válido.', boardEffect: 2, fanEffect: 2, moraleEffect: 2 },
+          { label: 'Não, merecíamos ganhar. Estou decepcionado com o resultado.', boardEffect: 0, fanEffect: -2, moraleEffect: -3 },
+          { label: 'O empate nos serve para seguir em frente com foco.', boardEffect: 3, fanEffect: 3, moraleEffect: 3 },
+        ],
+      },
+      {
+        question: 'O que vai mudar para os próximos jogos?',
+        options: [
+          { label: 'Vamos intensificar os treinos e ajustar a tática.', boardEffect: 5, fanEffect: 3, moraleEffect: 0 },
+          { label: 'Confio no grupo — são detalhes que precisamos corrigir.', boardEffect: 3, fanEffect: 5, moraleEffect: 5 },
+          { label: 'Preciso rever o elenco. Talvez precisemos de reforços.', boardEffect: -3, fanEffect: 2, moraleEffect: -3 },
+        ],
+      },
+    ];
+  } else {
+    return [
+      {
+        question: 'Como você explica a derrota de hoje?',
+        options: [
+          { label: 'Assumo a responsabilidade — a equipe não foi bem tácticamente.', boardEffect: 5, fanEffect: 5, moraleEffect: 2 },
+          { label: 'O adversário foi melhor hoje. Tiramos lições.', boardEffect: 2, fanEffect: 2, moraleEffect: 2 },
+          { label: 'Os jogadores não deram o máximo — estou insatisfeito.', boardEffect: -2, fanEffect: 0, moraleEffect: -8 },
+        ],
+      },
+      {
+        question: 'A sequência de resultados preocupa?',
+        options: [
+          { label: 'Não. Temos caráter e vamos reagir na próxima.', boardEffect: 3, fanEffect: 5, moraleEffect: 5 },
+          { label: 'Precisamos analisar com calma e ajustar o trabalho.', boardEffect: 4, fanEffect: 2, moraleEffect: 2 },
+          { label: 'Sim, preciso rever o planejamento da temporada.', boardEffect: 0, fanEffect: -3, moraleEffect: -5 },
+        ],
+      },
+    ];
+  }
 }
 
 function TeamBadge({ name, shortName, bg, fg }: { name: string; shortName: string; bg: string; fg: string }) {

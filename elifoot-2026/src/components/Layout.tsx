@@ -4,7 +4,7 @@ import { useGameStore } from '@/store/gameStore';
 import {
   Home, Trophy, Users, Calendar, LogOut, Save, ArrowRightLeft,
   Dumbbell, DollarSign, Shield, History, Volume2, VolumeX,
-  Handshake, MoreHorizontal, X, AlertTriangle, BarChart2, Briefcase, Search, Building2, TrendingUp,
+  Handshake, MoreHorizontal, X, AlertTriangle, BarChart2, Briefcase, Search, Building2, TrendingUp, Award,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useI18nStore, useT, type Lang } from '@/i18n';
@@ -130,6 +130,7 @@ export default function Layout() {
           <NavItem to="/game/scouting" icon={<Search className="w-4 h-4" />}>Scouting</NavItem>
           <NavItem to="/game/infrastructure" icon={<Building2 className="w-4 h-4" />}>Infraestrutura</NavItem>
           <NavItem to="/game/stats" icon={<TrendingUp className="w-4 h-4" />}>Estatísticas</NavItem>
+          <NavItem to="/game/awards" icon={<Award className="w-4 h-4" />}>Prêmios</NavItem>
           <NavItem to="/game/career" icon={<Briefcase className="w-4 h-4" />}>Carreira</NavItem>
           <NavItem to="/game/history" icon={<History className="w-4 h-4" />}>{t('nav_history')}</NavItem>
           <div className="px-3 pt-3 pb-1 text-xs uppercase tracking-wider text-white/30">{t('nav_competitions')}</div>
@@ -184,6 +185,7 @@ export default function Layout() {
                 { to: '/game/scouting', icon: <Search className="w-5 h-5" />, label: 'Scouting' },
                 { to: '/game/infrastructure', icon: <Building2 className="w-5 h-5" />, label: 'Infraestrutura' },
                 { to: '/game/stats', icon: <TrendingUp className="w-5 h-5" />, label: 'Estatísticas' },
+                { to: '/game/awards', icon: <Award className="w-5 h-5" />, label: 'Prêmios' },
                 { to: '/game/career', icon: <Briefcase className="w-5 h-5" />, label: 'Carreira' },
                 { to: '/game/history', icon: <History className="w-5 h-5" />, label: 'Histórico' },
               ].map(({ to, icon, label }) => (

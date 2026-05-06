@@ -260,6 +260,33 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Moral do elenco */}
+      <div className="panel p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <span className="text-xl">💪</span> Moral do Elenco
+          </h3>
+          <span className={`text-sm font-bold ${
+            (save.squadMorale ?? 70) >= 70 ? 'text-green-400' :
+            (save.squadMorale ?? 70) >= 40 ? 'text-yellow-400' : 'text-red-400'
+          }`}>{save.squadMorale ?? 70}%</span>
+        </div>
+        <div className="w-full bg-white/10 rounded-full h-2.5">
+          <div
+            className={`h-2.5 rounded-full transition-all ${
+              (save.squadMorale ?? 70) >= 70 ? 'bg-green-500' :
+              (save.squadMorale ?? 70) >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+            }`}
+            style={{ width: `${save.squadMorale ?? 70}%` }}
+          />
+        </div>
+        <div className="text-xs text-white/40 mt-1">
+          {(save.squadMorale ?? 70) >= 70 ? 'Elenco motivado — performance em alta' :
+           (save.squadMorale ?? 70) >= 40 ? 'Clima neutro no vestiário' :
+           'Vestiário em crise — resultados podem piorar'}
+        </div>
+      </div>
+
       {/* Satisfação da torcida */}
       <div className="panel p-4">
         <div className="flex items-center justify-between mb-2">

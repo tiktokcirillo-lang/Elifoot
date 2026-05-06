@@ -246,6 +246,47 @@ export function processSeasonEnd(save: SaveGame): void {
   if (!save.seasonAwards) save.seasonAwards = [];
   save.seasonAwards.push(award);
 
+  // ── Promoção e rebaixamento ──────────────────────────────
+  const serieBComp = save.competitions.find((c) => c.id.startsWith('serie_b_'));
+  if (brasileirao && serieBComp) {
+    const brStandings = sortStandings(brasileirao.standings, save.teams);
+    const bStandings  = sortStandings(serieBComp.standings, save.teams);
+
+    const relegated = brStandings.slice(16).map((s) => s.teamId); // posições 17-20
+    const promoted  = bStandings.slice(0, 4).map((s) => s.teamId); // top 4 da Série B
+
+    save.teams.forEach((t) => {
+      if (relegated.includes(t.id)) t.division = 'B';
+      else if (promoted.includes(t.id)) t.division = 'A';
+    });
+
+    save.promotionRelegation = { promoted, relegated };
+
+    // Notícia de promoção/rebaixamento
+    const promotedNames = promoted.map((id) => save.teams.find((t) => t.id === id)?.name ?? id);
+    const relegatedNames = relegated.map((id) => save.teams.find((t) => t.id === id)?.name ?? id);
+    if (promoted.length > 0) {
+      save.news.unshift({
+        id: nanoid(8),
+        turn: save.currentTurn,
+        type: 'achievement',
+        title: 'Promoção para a Série A!',
+        body: `Times promovidos: ${promotedNames.join(', ')}.`,
+        read: false,
+      });
+    }
+    if (relegated.length > 0) {
+      save.news.unshift({
+        id: nanoid(8),
+        turn: save.currentTurn,
+        type: 'general',
+        title: 'Rebaixamento para a Série B',
+        body: `Times rebaixados: ${relegatedNames.join(', ')}.`,
+        read: false,
+      });
+    }
+  }
+
   // ── XP e reputação do técnico ─────────────────────────────
   let xpGained = 0;
   const achievedCount = save.boardObjectives.filter((o) => o.status === 'achieved').length;

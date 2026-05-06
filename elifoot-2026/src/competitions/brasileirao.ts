@@ -72,10 +72,14 @@ export interface BrasileiraoConfig {
   startTurn: number;
   turnsBetweenRounds: number; // dias entre rodadas no calendário do jogo
   seed?: number;
+  // Overrides opcionais (para criar Série B, etc.)
+  id?: string;
+  name?: string;
+  shortName?: string;
 }
 
 export function createBrasileirao(cfg: BrasileiraoConfig): Competition {
-  const compId = `brasileirao_${cfg.season}`;
+  const compId = cfg.id ?? `brasileirao_${cfg.season}`;
   const rng = createRng(cfg.seed ?? Date.now());
   const shuffled = shuffle(cfg.teamIds, rng);
 
@@ -100,8 +104,8 @@ export function createBrasileirao(cfg: BrasileiraoConfig): Competition {
 
   return {
     id: compId,
-    name: 'Campeonato Brasileiro Série A',
-    shortName: 'Brasileirão',
+    name: cfg.name ?? 'Campeonato Brasileiro Série A',
+    shortName: cfg.shortName ?? 'Brasileirão',
     format: 'round_robin',
     season: cfg.season,
     teamIds: cfg.teamIds,

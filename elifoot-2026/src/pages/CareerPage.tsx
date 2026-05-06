@@ -1,6 +1,6 @@
 import { useGameStore } from '@/store/gameStore';
 import { MANAGER_SKILLS, reputationTier } from '@/data/managerSkills';
-import { Star, Zap, Shield, TrendingUp, DollarSign, Users, Lock, CheckCircle, Trophy, Briefcase } from 'lucide-react';
+import { Star, Zap, Shield, TrendingUp, DollarSign, Users, Lock, CheckCircle, Trophy, Briefcase, Building2, X } from 'lucide-react';
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   scouting:   <Users className="w-4 h-4" />,
@@ -40,6 +40,8 @@ function Stars({ count }: { count: number }) {
 export default function CareerPage() {
   const save = useGameStore((s) => s.save);
   const unlockSkill = useGameStore((s) => s.unlockSkill);
+  const acceptJobOffer = useGameStore((s) => s.acceptJobOffer);
+  const rejectJobOffer = useGameStore((s) => s.rejectJobOffer);
   if (!save) return null;
 
   const rep    = save.managerReputation ?? 0;
@@ -214,6 +216,50 @@ export default function CareerPage() {
           })}
         </div>
       </div>
+
+      {/* Propostas de emprego */}
+      {(save.managerJobOffers ?? []).filter((o) => o.expiresAt > save.currentTurn).length > 0 && (
+        <div className="panel p-5">
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-pitch-400" /> Propostas de Emprego
+          </h3>
+          <div className="space-y-3">
+            {(save.managerJobOffers ?? [])
+              .filter((o) => o.expiresAt > save.currentTurn)
+              .map((offer) => (
+                <div key={offer.id} className="bg-white/5 rounded-xl p-4 border border-white/10">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">{offer.teamName}</div>
+                      <div className="text-sm text-white/60 mt-0.5">
+                        Salário: <span className="text-green-400">R$ {offer.salary}k/mês</span>
+                        {' · '}Orçamento: <span className="text-gold-400">R$ {(offer.transferBudget / 1000).toFixed(1)}M</span>
+                      </div>
+                      <div className="text-xs text-white/40 mt-1">
+                        Expira no turno {offer.expiresAt}
+                        {offer.penaltyIfMidSeason && ' · ⚠️ Penalidade se aceita no meio da temporada'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => acceptJobOffer(offer.id)}
+                      className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1"
+                    >
+                      <CheckCircle className="w-3 h-3" /> Aceitar
+                    </button>
+                    <button
+                      onClick={() => rejectJobOffer(offer.id)}
+                      className="btn-ghost text-xs px-4 py-1.5 flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Recusar
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Como ganhar XP */}
       <div className="panel p-5">

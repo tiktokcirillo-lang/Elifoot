@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore, isTransferWindowOpen } from '@/store/gameStore';
 import type { Player } from '@/types';
-import { ShoppingCart, X, Tag, ArrowRightLeft, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { ShoppingCart, X, Tag, ArrowRightLeft, ChevronDown, ChevronUp, Lock, RefreshCw } from 'lucide-react';
 
 type Tab = 'market' | 'my_players' | 'my_bids';
 
@@ -309,6 +309,7 @@ function MyPlayersTab({ windowOpen }: { windowOpen: boolean }) {
 
 function MyBidsTab() {
   const save = useGameStore((s) => s.save)!;
+  const acceptCounterOffer = useGameStore((s) => s.acceptCounterOffer);
 
   const myBids = (save.transferMarket ?? [])
     .filter((l) => l.bids.some((b) => b.fromTeamId === save.controlledTeamId))
@@ -333,12 +334,23 @@ function MyBidsTab() {
           ?? save.teams.flatMap((t) => t.squad).find((p) => p.id === listing.playerId);
         if (!player) return null;
 
+        const isCountered = bid.status === 'countered';
         const statusColor =
           bid.status === 'accepted' ? 'text-green-400' :
-          bid.status === 'rejected' ? 'text-red-400' : 'text-white/60';
+          bid.status === 'rejected' ? 'text-red-400' :
+          isCountered ? 'text-yellow-400' : 'text-white/60';
+
+        const statusLabel =
+          bid.status === 'pending'   ? 'Aguardando' :
+          bid.status === 'accepted'  ? 'Aceita' :
+          bid.status === 'rejected'  ? 'Recusada' :
+          bid.status === 'countered' ? 'Contra-oferta' : bid.status;
+
+        const userTeam = save.teams.find((t) => t.id === save.controlledTeamId)!;
+        const canAffordCounter = isCountered && bid.counterAmount != null && userTeam.budget >= bid.counterAmount;
 
         return (
-          <div key={`${listing.id}-${bid.id}`} className="flex items-center gap-3 px-4 py-3">
+          <div key={`${listing.id}-${bid.id}`} className="flex items-center gap-3 px-4 py-3 flex-wrap">
             <PlayerBadge player={player} />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold">{player.name}</div>
@@ -346,10 +358,24 @@ function MyBidsTab() {
             </div>
             <div className="text-right">
               <div className="text-sm font-semibold text-gold-400">R$ {(bid.amount / 1000).toFixed(1)}M</div>
-              <div className={`text-xs capitalize ${statusColor}`}>
-                {bid.status === 'pending' ? 'Aguardando' : bid.status === 'accepted' ? 'Aceita' : 'Recusada'}
-              </div>
+              <div className={`text-xs ${statusColor}`}>{statusLabel}</div>
             </div>
+            {isCountered && bid.counterAmount != null && (
+              <div className="w-full pl-13 flex items-center gap-3 mt-1 text-sm">
+                <RefreshCw className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                <span className="text-white/70">
+                  Contra-oferta: <span className="font-semibold text-yellow-300">R$ {(bid.counterAmount / 1000).toFixed(1)}M</span>
+                </span>
+                <button
+                  className="ml-auto btn-primary text-xs px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={!canAffordCounter}
+                  title={!canAffordCounter ? 'Budget insuficiente' : undefined}
+                  onClick={() => acceptCounterOffer(listing.id, bid.id)}
+                >
+                  Aceitar proposta
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

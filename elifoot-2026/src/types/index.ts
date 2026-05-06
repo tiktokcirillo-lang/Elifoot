@@ -13,7 +13,8 @@ export interface TransferBid {
   fromTeamId: string;
   amount: number; // em milhares
   turn: number;
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'rejected' | 'countered';
+  counterAmount?: number; // proposta de contra-oferta do vendedor
 }
 
 export interface TransferListing {
@@ -174,10 +175,42 @@ export interface SponsorOffer {
 
 export type Foot = 'L' | 'R' | 'B';
 
+// ============================================================
+// Proposta de emprego para o técnico
+// ============================================================
+
+export interface ManagerJobOffer {
+  id: string;
+  teamId: string;
+  teamName: string;
+  salary: number; // k/mês
+  transferBudget: number; // k
+  reputationRequired: number;
+  expiresAt: number; // turno
+  penaltyIfMidSeason: boolean;
+}
+
+// ============================================================
+// Coletiva de imprensa pós-jogo
+// ============================================================
+
+export interface PressConferenceOption {
+  label: string;
+  boardEffect: number;
+  fanEffect: number;
+  moraleEffect: number;
+}
+
+export interface PressQuestion {
+  question: string;
+  options: PressConferenceOption[];
+}
+
 export interface Player {
   id: string;
   name: string;
   age: number;
+  nationality?: string; // ex: 'BR', 'AR', 'PT'
   position: Position;
   foot: Foot;
   // Atributos 1 a 99
@@ -231,6 +264,7 @@ export interface Team {
   starting11: string[]; // ids dos jogadores titulares
   bench: string[]; // ids da reserva
   isUserControlled: boolean;
+  division?: 'A' | 'B' | 'C'; // divisão atual do time
 }
 
 export type Formation =
@@ -465,6 +499,15 @@ export interface ManagerSkillDef {
   cost: number; // XP necessário para desbloquear
 }
 
+// ============================================================
+// Promoção/rebaixamento
+// ============================================================
+
+export interface PromotionRelegation {
+  promoted: string[]; // teamIds promovidos para Série A
+  relegated: string[]; // teamIds rebaixados para Série B
+}
+
 export interface SaveGame {
   id: string;
   name: string;
@@ -524,4 +567,10 @@ export interface SaveGame {
   infrastructure: Infrastructure;
   // Convocações internacionais
   internationalAbsences: InternationalAbsence[];
+  // Moral coletivo do elenco (0–100)
+  squadMorale: number;
+  // Propostas de emprego para o técnico
+  managerJobOffers: ManagerJobOffer[];
+  // Promoção/rebaixamento da última temporada
+  promotionRelegation?: PromotionRelegation;
 }
