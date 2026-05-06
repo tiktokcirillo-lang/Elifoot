@@ -16,6 +16,8 @@ import SponsorsPage from '@/pages/SponsorsPage';
 import RankingsPage from '@/pages/RankingsPage';
 import CareerPage from '@/pages/CareerPage';
 import ScoutingPage from '@/pages/ScoutingPage';
+import InfrastructurePage from '@/pages/InfrastructurePage';
+import StatsPage from '@/pages/StatsPage';
 import Layout from '@/components/Layout';
 
 export default function App() {
@@ -39,6 +41,8 @@ export default function App() {
         <Route path="/game/rankings" element={<RankingsPage />} />
         <Route path="/game/career" element={<CareerPage />} />
         <Route path="/game/scouting" element={<ScoutingPage />} />
+        <Route path="/game/infrastructure" element={<InfrastructurePage />} />
+        <Route path="/game/stats" element={<StatsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

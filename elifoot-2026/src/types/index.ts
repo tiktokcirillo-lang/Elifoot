@@ -50,6 +50,29 @@ export interface TacticalSetup {
   pressing: PressingLevel;
   penaltyTakerId: string | null;
   cornerTakerId: string | null;
+  captainId: string | null;
+}
+
+// ============================================================
+// Infraestrutura
+// ============================================================
+
+export type InfrastructureLevel = 0 | 1 | 2 | 3;
+
+export interface Infrastructure {
+  training: InfrastructureLevel;
+  medical: InfrastructureLevel;
+  youth: InfrastructureLevel;
+}
+
+// ============================================================
+// Convocação internacional
+// ============================================================
+
+export interface InternationalAbsence {
+  playerId: string;
+  playerName: string;
+  returnTurn: number;
 }
 
 // ============================================================
@@ -495,4 +518,10 @@ export interface SaveGame {
   playerInteractions: PlayerInteraction[];
   // Avaliações pós-jogo
   matchRatings: MatchRating[];
+  // Fan satisfaction (0–100)
+  fanSatisfaction: number;
+  // Infraestrutura
+  infrastructure: Infrastructure;
+  // Convocações internacionais
+  internationalAbsences: InternationalAbsence[];
 }

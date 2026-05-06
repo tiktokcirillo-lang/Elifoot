@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import type { Player, Position } from '@/types';
-import { Star, Heart, Activity, TrendingUp, ArrowUpCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Star, Heart, Activity, TrendingUp, ArrowUpCircle, RefreshCw, AlertTriangle, Crown } from 'lucide-react';
 
 const POSITION_ORDER: Position[] = ['GK', 'DF', 'MF', 'FW'];
 const POSITION_LABEL: Record<Position, string> = {
@@ -18,6 +18,8 @@ export default function SquadPage() {
   const promoteYouthPlayer = useGameStore((s) => s.promoteYouthPlayer);
   const renewContract = useGameStore((s) => s.renewContract);
   const [selected, setSelected] = useState<string[]>(() => userTeam?.starting11 ?? []);
+
+  const captainId = save?.tacticalSetup?.captainId ?? null;
 
   if (!userTeam || !save) return null;
 
@@ -97,6 +99,7 @@ export default function SquadPage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm truncate flex items-center gap-1">
                       {isStarter && <Star className="w-3 h-3 text-gold-500 fill-gold-500" />}
+                      {p.id === captainId && <Crown className="w-3 h-3 text-yellow-400" aria-label="Capitão" />}
                       {(contractExpired || contractExpiring) && <AlertTriangle className={`w-3 h-3 ${contractExpired ? 'text-red-400' : 'text-yellow-400'}`} />}
                       {p.name}
                     </div>

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
-import { ChevronRight, FastForward, Target, DollarSign, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, Star, Briefcase, MessageSquare } from 'lucide-react';
+import { ChevronRight, FastForward, Target, DollarSign, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, Star, Briefcase, MessageSquare, Globe } from 'lucide-react';
 import { calcWeeklyCashflow } from '@/engine/financeEngine';
 import { reputationTier } from '@/data/managerSkills';
 
@@ -259,6 +259,49 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Satisfação da torcida */}
+      <div className="panel p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <span className="text-xl">📣</span> Satisfação da Torcida
+          </h3>
+          <span className={`text-sm font-bold ${
+            (save.fanSatisfaction ?? 50) >= 70 ? 'text-green-400' :
+            (save.fanSatisfaction ?? 50) >= 40 ? 'text-yellow-400' : 'text-red-400'
+          }`}>{save.fanSatisfaction ?? 50}%</span>
+        </div>
+        <div className="w-full bg-white/10 rounded-full h-2.5">
+          <div
+            className={`h-2.5 rounded-full transition-all ${
+              (save.fanSatisfaction ?? 50) >= 70 ? 'bg-green-500' :
+              (save.fanSatisfaction ?? 50) >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+            }`}
+            style={{ width: `${save.fanSatisfaction ?? 50}%` }}
+          />
+        </div>
+        <div className="text-xs text-white/40 mt-1">
+          {(save.fanSatisfaction ?? 50) >= 70 ? 'Torcida empolgada — bilheteria em alta' :
+           (save.fanSatisfaction ?? 50) >= 40 ? 'Torcida expectante — resultados determinam o humor' :
+           'Torcida insatisfeita — pressão no clube aumenta'}
+        </div>
+      </div>
+
+      {/* Convocações internacionais */}
+      {(save.internationalAbsences ?? []).length > 0 && (
+        <div className="panel p-4 border border-blue-500/30">
+          <h3 className="font-semibold flex items-center gap-2 mb-2 text-sm">
+            <Globe className="w-4 h-4 text-blue-400" /> Convocados para a Seleção
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {(save.internationalAbsences ?? []).map((a) => (
+              <span key={a.playerId} className="text-xs bg-blue-500/15 border border-blue-500/30 rounded px-2 py-1 text-blue-200">
+                {a.playerName} · retorna dia {a.returnTurn}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Interações com jogadores */}
       {(save.playerInteractions ?? []).filter((i) => !i.resolved).length > 0 && (

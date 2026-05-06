@@ -14,6 +14,7 @@ import type {
   TransferListing,
   TransferBid,
   Formation,
+  Infrastructure,
 } from '@/types';
 import { SPONSOR_BRANDS } from '@/data/sponsors';
 import { MANAGER_SKILLS } from '@/data/managerSkills';
@@ -146,6 +147,8 @@ interface GameState {
   recordMatchRating: (fixtureId: string, ratings: Record<string, number>) => void;
   // Team talk
   applyTeamTalk: (moraleBonus: number) => void;
+  // Infraestrutura
+  upgradeInfrastructure: (type: keyof Infrastructure) => void;
 }
 
 // ============================================================
@@ -734,7 +737,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       seasonEndTurn: 280,
       transferMarket: [],
       trainingPlan: { type: 'tactics', intensity: 'normal' },
-      tacticalSetup: { posture: 'balanced', pressing: 'medium', penaltyTakerId: null, cornerTakerId: null },
+      tacticalSetup: { posture: 'balanced', pressing: 'medium', penaltyTakerId: null, cornerTakerId: null, captainId: null },
       financeHistory: [],
       boardObjectives: generateBoardObjectives(resolvedUserTeam),
       seasonRecords: [],
@@ -760,6 +763,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       activeLoans: [],
       playerInteractions: [],
       matchRatings: [],
+      fanSatisfaction: 50,
+      infrastructure: { training: 0, medical: 0, youth: 0 },
+      internationalAbsences: [],
     };
 
     pushNews(save, {
@@ -778,7 +784,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       // Compat: campos adicionados progressivamente
       if (!loaded.transferMarket)   loaded.transferMarket = [];
       if (!loaded.trainingPlan)     loaded.trainingPlan   = { type: 'tactics', intensity: 'normal' };
-      if (!loaded.tacticalSetup)    loaded.tacticalSetup  = { posture: 'balanced', pressing: 'medium', penaltyTakerId: null, cornerTakerId: null };
+      if (!loaded.tacticalSetup)    loaded.tacticalSetup  = { posture: 'balanced', pressing: 'medium', penaltyTakerId: null, cornerTakerId: null, captainId: null };
+      if (loaded.tacticalSetup && loaded.tacticalSetup.captainId === undefined) loaded.tacticalSetup.captainId = null;
       if (!loaded.financeHistory)   loaded.financeHistory = [];
       if (!loaded.boardObjectives)  {
         const ut = loaded.teams.find((t) => t.id === loaded.controlledTeamId);
@@ -814,6 +821,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!loaded.activeLoans) loaded.activeLoans = [];
       if (!loaded.playerInteractions) loaded.playerInteractions = [];
       if (!loaded.matchRatings) loaded.matchRatings = [];
+      if (loaded.fanSatisfaction === undefined) loaded.fanSatisfaction = 50;
+      if (!loaded.infrastructure) loaded.infrastructure = { training: 0, medical: 0, youth: 0 };
+      if (!loaded.internationalAbsences) loaded.internationalAbsences = [];
       set({ save: loaded });
     }
   },
@@ -1059,6 +1069,66 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
+    // Fan satisfaction semanal (baseado na posição no Brasileirão)
+    if (save.currentTurn % 7 === 0) {
+      const brasileiraoFan = save.competitions.find((c) => c.format === 'round_robin');
+      if (brasileiraoFan) {
+        const standings = sortStandings(brasileiraoFan.standings, save.teams, brasileiraoFan.id, brasileiraoFan.fixtures);
+        const pos = standings.findIndex((s) => s.teamId === save.controlledTeamId) + 1;
+        const fanDelta = pos === 0 ? 0 : pos <= 4 ? 2 : pos >= 17 ? -3 : 0;
+        save.fanSatisfaction = Math.max(0, Math.min(100, (save.fanSatisfaction ?? 50) + fanDelta));
+      }
+    }
+
+    // Convocações internacionais (a cada 28 turnos, nas semanas 28 e 140)
+    if (save.currentTurn % 28 === 0 && !save.dismissed) {
+      if (!save.internationalAbsences) save.internationalAbsences = [];
+      // Libera jogadores que voltaram
+      save.internationalAbsences = save.internationalAbsences.filter((a) => a.returnTurn > save.currentTurn);
+      // Chama jogadores com OVR >= 68 que não estão convocados
+      const userTeamIntl = save.teams.find((t) => t.id === save.controlledTeamId);
+      if (userTeamIntl) {
+        const absentIds = new Set(save.internationalAbsences.map((a) => a.playerId));
+        const eligible = userTeamIntl.squad
+          .filter((p) => p.overall >= 68 && !absentIds.has(p.id) && !p.injuredUntil)
+          .sort(() => Math.random() - 0.5)
+          .slice(0, Math.floor(Math.random() * 2) + 1); // 1-2 convocados
+        if (eligible.length > 0) {
+          eligible.forEach((p) => {
+            save.internationalAbsences!.push({ playerId: p.id, playerName: p.name, returnTurn: save.currentTurn + 7 });
+          });
+          pushNews(save, {
+            type: 'general',
+            title: `Convocação internacional: ${eligible.map((p) => p.name).join(', ')}`,
+            body: `${eligible.length > 1 ? 'Jogadores convocados' : 'Jogador convocado'} para a seleção. Retornam no dia ${save.currentTurn + 7}.`,
+          });
+        }
+      }
+    }
+
+    // Retorno de jogadores da seleção
+    if (save.internationalAbsences) {
+      const returned = save.internationalAbsences.filter((a) => a.returnTurn <= save.currentTurn);
+      if (returned.length > 0) {
+        pushNews(save, {
+          type: 'general',
+          title: `Retorno da seleção: ${returned.map((a) => a.playerName).join(', ')}`,
+          body: 'Jogadores estão de volta ao clube.',
+        });
+        save.internationalAbsences = save.internationalAbsences.filter((a) => a.returnTurn > save.currentTurn);
+      }
+    }
+
+    // Infraestrutura — efeito médico: acelera recuperação de lesões
+    if (save.currentTurn % 7 === 0 && save.infrastructure?.medical > 0) {
+      const userTeamMed = save.teams.find((t) => t.id === save.controlledTeamId);
+      userTeamMed?.squad.forEach((p) => {
+        if (p.injuredUntil && p.injuredUntil > save.currentTurn) {
+          p.injuredUntil = Math.max(save.currentTurn, p.injuredUntil - save.infrastructure.medical);
+        }
+      });
+    }
+
     // Mercado de transferências
     processAITransfers(save);
 
@@ -1139,6 +1209,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       const derbyNews = generateDerbyNews(save, save.controlledTeamId, opponentId, userGoals, oppGoals);
       if (derbyNews) pushNews(save, derbyNews);
+    }
+
+    // Fan satisfaction após partida
+    {
+      const userGoalsFan = isUserHome ? result.homeGoals : result.awayGoals;
+      const oppGoalsFan  = isUserHome ? result.awayGoals : result.homeGoals;
+      const derbyMult = rivalry ? (rivalry.tier === 'classico' ? 2 : 1.5) : 1;
+      const fanDelta = userGoalsFan > oppGoalsFan ? Math.round(5 * derbyMult)
+        : userGoalsFan < oppGoalsFan ? Math.round(-7 * derbyMult) : 1;
+      save.fanSatisfaction = Math.max(0, Math.min(100, (save.fanSatisfaction ?? 50) + fanDelta));
     }
 
     // Resolve mata-matas depois da partida do usuário
@@ -1294,6 +1374,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       const derbyNews2 = generateDerbyNews(save, save.controlledTeamId, opponentId2, userGoals2, oppGoals2);
       if (derbyNews2) pushNews(save, derbyNews2);
+    }
+
+    // Fan satisfaction após partida (segundo tempo)
+    {
+      const userGoalsFan2 = isUserHome2 ? combined.homeGoals : combined.awayGoals;
+      const oppGoalsFan2  = isUserHome2 ? combined.awayGoals : combined.homeGoals;
+      const derbyMult2 = rivalry2 ? (rivalry2.tier === 'classico' ? 2 : 1.5) : 1;
+      const fanDelta2 = userGoalsFan2 > oppGoalsFan2 ? Math.round(5 * derbyMult2)
+        : userGoalsFan2 < oppGoalsFan2 ? Math.round(-7 * derbyMult2) : 1;
+      save.fanSatisfaction = Math.max(0, Math.min(100, (save.fanSatisfaction ?? 50) + fanDelta2));
     }
 
     resolveKnockoutsForSave(save);
@@ -1858,6 +1948,33 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!save.matchRatings) save.matchRatings = [];
     const existing = save.matchRatings.find((r) => r.fixtureId === fixtureId);
     if (existing) { existing.ratings = ratings; } else { save.matchRatings.push({ fixtureId, ratings }); }
+    set({ save });
+  },
+
+  // ── Infraestrutura ────────────────────────────────────────
+
+  upgradeInfrastructure(type) {
+    const COSTS: Record<keyof Infrastructure, [number, number, number]> = {
+      training: [500, 1500, 3000],
+      medical:  [400, 1200, 2500],
+      youth:    [600, 2000, 4000],
+    };
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    if (!save.infrastructure) save.infrastructure = { training: 0, medical: 0, youth: 0 };
+    const currentLevel = save.infrastructure[type] as 0 | 1 | 2 | 3;
+    if (currentLevel >= 3) return;
+    const cost: number = COSTS[type][currentLevel as 0 | 1 | 2];
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam || userTeam.budget < cost) {
+      pushNews(save, { type: 'finance', title: 'Budget insuficiente', body: `Necessário R$ ${cost}k para melhorar a infraestrutura.` });
+      set({ save }); return;
+    }
+    userTeam.budget -= cost;
+    (save.infrastructure[type] as number)++;
+    const NAMES: Record<keyof Infrastructure, string> = { training: 'Centro de Treinamento', medical: 'Departamento Médico', youth: 'Academia de Base' };
+    pushNews(save, { type: 'general', title: `${NAMES[type]} melhorado`, body: `Instalação agora no nível ${save.infrastructure[type]}/3.` });
     set({ save });
   },
 }));

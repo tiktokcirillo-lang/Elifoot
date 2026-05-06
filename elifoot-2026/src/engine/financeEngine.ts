@@ -64,7 +64,9 @@ export function processTicketRevenue(
   const capacity = STADIUM_CAPACITY[userTeam.tier];
   const rate = attendanceRate(userTeam, awayTeam, isKnockout);
   const price = TICKET_PRICE[userTeam.tier];
-  const revenue = Math.round((capacity * rate * price) / 1000); // em milhares
+  // Fan satisfaction afeta bilheteria: 0→80%, 50→100%, 100→120%
+  const fanMult = 0.8 + ((save.fanSatisfaction ?? 50) / 100) * 0.4;
+  const revenue = Math.round((capacity * rate * price * fanMult) / 1000); // em milhares
 
   userTeam.budget += revenue;
   addRecord(save, {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import type { Formation, TacticalPosture, PressingLevel } from '@/types';
-import { Shield, Zap, Scale, Target, Users } from 'lucide-react';
+import { Shield, Zap, Scale, Target, Users, Crown } from 'lucide-react';
 
 const POSTURES: { val: TacticalPosture; label: string; desc: string; icon: React.ReactNode }[] = [
   { val: 'attack',    label: 'Ofensivo',     desc: '+20% ataque, -15% defesa. Mais gols, mais riscos.',       icon: <Zap className="w-5 h-5" /> },
@@ -109,6 +109,17 @@ export default function TacticsPage() {
         </div>
       </div>
 
+      {/* Capitão */}
+      <div className="panel p-5">
+        <h3 className="font-semibold mb-3 flex items-center gap-2">
+          <Crown className="w-4 h-4 text-gold-400" /> Capitão
+        </h3>
+        <CaptainSelector
+          selected={tactics.captainId}
+          onSelect={(id) => setTacticalSetup({ ...tactics, captainId: id })}
+        />
+      </div>
+
       {/* Batedores de bola parada */}
       <div className="panel p-5">
         <button
@@ -141,6 +152,43 @@ export default function TacticsPage() {
         Postura {POSTURES.find((p) => p.val === tactics.posture)?.label} ·
         Pressing {PRESSING_OPTIONS.find((p) => p.val === tactics.pressing)?.label} ·
         Formação {userTeam.formation}
+        {tactics.captainId && (() => {
+          const cap = userTeam.squad.find((p) => p.id === tactics.captainId);
+          return cap ? <> · Capitão: <span className="text-white">{cap.name}</span></> : null;
+        })()}
+      </div>
+    </div>
+  );
+}
+
+function CaptainSelector({
+  selected, onSelect,
+}: {
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const save = useGameStore((s) => s.save)!;
+  const squad = save.teams.find((t) => t.id === save.controlledTeamId)?.squad ?? [];
+  const byOvr = [...squad].sort((a, b) => b.overall - a.overall).slice(0, 12);
+
+  return (
+    <div>
+      <div className="text-xs text-white/50 mb-2">Escolha um jogador para usar a braçadeira de capitão.</div>
+      <div className="flex flex-wrap gap-1">
+        {byOvr.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onSelect(p.id)}
+            className={`px-2 py-1 rounded text-xs transition-colors flex items-center gap-1 ${
+              selected === p.id
+                ? 'bg-gold-500/30 border border-gold-500 text-white'
+                : 'bg-white/5 border border-white/10 text-white/60 hover:bg-white/10'
+            }`}
+          >
+            {selected === p.id && <Crown className="w-3 h-3 text-gold-400" />}
+            {p.name.split(' ')[0]} <span className="text-white/40">({p.position}, {p.overall})</span>
+          </button>
+        ))}
       </div>
     </div>
   );
