@@ -3,10 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import type { MatchEvent, MatchResult, TacticalPosture, PressingLevel } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ArrowRightLeft, Mic, MicOff, Volume2, VolumeX, Star } from 'lucide-react';
+import { ChevronRight, ArrowRightLeft, Mic, MicOff, Volume2, VolumeX, Star, Flame } from 'lucide-react';
 import MatchField from '@/components/MatchField';
 import { soundEngine } from '@/engine/soundEngine';
 import { narratorEngine } from '@/engine/narratorEngine';
+import { getRivalry } from '@/data/rivalries';
 
 type Phase = 'prematch' | 'teamtalk' | 'playing' | 'halftime' | 'finished';
 
@@ -170,6 +171,8 @@ export default function MatchPage() {
   if (!save || !fixture || !home || !away) return <div className="p-6">Carregando partida...</div>;
 
   const comp = save.competitions.find((c) => c.id === fixture.competitionId);
+  const opponentId = fixture.homeTeamId === save.controlledTeamId ? fixture.awayTeamId : fixture.homeTeamId;
+  const rivalry = getRivalry(save.controlledTeamId, opponentId);
 
   const homeScoreNow = result
     ? result.events.filter((e) => e.type === 'goal' && e.side === 'home' && e.minute <= currentMinute).length
@@ -186,11 +189,24 @@ export default function MatchPage() {
           <div className="text-xs uppercase tracking-wider text-white/50 mb-2">
             {comp?.shortName} · Rodada {fixture.round}
           </div>
-          <div className="flex items-center justify-around mb-6">
+          <div className="flex items-center justify-around mb-4">
             <TeamBadge name={home.name} shortName={home.shortName} bg={home.primaryColor} fg={home.secondaryColor} />
             <div className="display-font text-4xl text-white/30">VS</div>
             <TeamBadge name={away.name} shortName={away.shortName} bg={away.primaryColor} fg={away.secondaryColor} />
           </div>
+
+          {/* Banner de clássico */}
+          {rivalry && (
+            <div className={`mb-5 rounded-xl py-3 px-4 flex items-center justify-center gap-2 ${
+              rivalry.tier === 'classico'
+                ? 'bg-yellow-500/20 border border-yellow-500/40 text-yellow-300'
+                : 'bg-red-500/15 border border-red-500/30 text-red-300'
+            }`}>
+              <Flame className="w-4 h-4" />
+              <span className="font-bold tracking-wide">{rivalry.tier === 'classico' ? '🏆 CLÁSSICO' : '⚽ DERBY'}</span>
+              <span className="text-sm opacity-80">— {rivalry.name}</span>
+            </div>
+          )}
 
           {/* Táticas */}
           {tactics && (
@@ -406,8 +422,15 @@ export default function MatchPage() {
     <div className="space-y-4 max-w-3xl mx-auto">
       <div className="panel p-6">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-xs uppercase tracking-wider text-white/50">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-white/50">
             {comp?.shortName} · Rodada {fixture.round}
+            {rivalry && (
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                rivalry.tier === 'classico' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-red-500/20 text-red-300'
+              }`}>
+                {rivalry.tier === 'classico' ? '🏆 CLÁSSICO' : '⚽ DERBY'}
+              </span>
+            )}
           </div>
           <div className="flex gap-2">
             <button

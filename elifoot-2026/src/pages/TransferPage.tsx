@@ -25,6 +25,19 @@ export default function TransferPage() {
         <div className="text-sm text-white/60">Dia atual: {save.currentTurn}</div>
       </div>
 
+      {/* Deadline Day banner */}
+      {(save.currentTurn === 28 || save.currentTurn === 161) && (
+        <div className="panel p-4 border-2 border-yellow-500/60 bg-yellow-500/10 animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚡</span>
+            <div>
+              <div className="font-bold text-yellow-300 text-lg">DEADLINE DAY</div>
+              <div className="text-sm text-yellow-200/70">Último dia da janela — a janela fecha à meia-noite!</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Janela de transferências */}
       {windowOpen ? (
         <div className="panel p-3 border border-pitch-500/40 bg-pitch-900/20 flex items-center gap-2 text-sm text-pitch-400">

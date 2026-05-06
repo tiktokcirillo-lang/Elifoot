@@ -46,6 +46,19 @@ export default function DashboardPage() {
   const cashflow = calcWeeklyCashflow(save);
   const achievedObjectives = save.boardObjectives?.filter((o) => o.status === 'achieved') ?? [];
 
+  // Últimas 5 partidas do Brasileirão
+  const brasileirao = save.competitions.find((c) => c.format === 'round_robin');
+  const lastFixtures = (brasileirao?.fixtures ?? [])
+    .filter((f) => f.played && f.result && (f.homeTeamId === userTeam.id || f.awayTeamId === userTeam.id))
+    .sort((a, b) => b.scheduledTurn - a.scheduledTurn)
+    .slice(0, 5);
+  const formResults = lastFixtures.map((f) => {
+    const isHome = f.homeTeamId === userTeam.id;
+    const scored = isHome ? f.result!.homeGoals : f.result!.awayGoals;
+    const conceded = isHome ? f.result!.awayGoals : f.result!.homeGoals;
+    return scored > conceded ? 'V' : scored < conceded ? 'D' : 'E';
+  });
+
   // Mostrar botão de nova temporada quando a temporada acabou
   if (save.seasonOver) {
     const lastRecord = save.seasonRecords[save.seasonRecords.length - 1];
@@ -118,7 +131,21 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Próxima partida */}
       <div className="panel p-5">
-        <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Próxima partida</div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs uppercase tracking-wider text-white/50">Próxima partida</div>
+          {formResults.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-white/30">Forma:</span>
+              {formResults.map((r, i) => (
+                <span key={i} className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  r === 'V' ? 'bg-green-500 text-white' :
+                  r === 'D' ? 'bg-red-500 text-white' :
+                  'bg-yellow-500 text-white'
+                }`}>{r}</span>
+              ))}
+            </div>
+          )}
+        </div>
         {nextFixture && competition && homeTeam && awayTeam ? (
           <div>
             <div className="text-sm text-white/60 mb-3">

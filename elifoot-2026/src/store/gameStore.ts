@@ -34,6 +34,8 @@ import { processWeeklyFinances, processTicketRevenue, recordTransfer } from '@/e
 import { isSeasonOver, processSeasonEnd, generateBoardObjectives, startNewSeason } from '@/engine/seasonEngine';
 import { createRng } from '@/utils/random';
 import { generateAvailableScouts, generateScoutReport, generateLoanOffers } from '@/engine/scoutingEngine';
+import { generateNarrativeNews, generateDerbyNews, derbyMoraleEffect } from '@/engine/storyEngine';
+import { getRivalry, isDerby } from '@/data/rivalries';
 
 // ============================================================
 // Utilidades exportadas
@@ -235,6 +237,20 @@ function simulateAllPendingFixturesForTurn(save: SaveGame, turn: number) {
             fixture.awayTeamId,
             result,
           );
+        }
+      }
+
+      // Derby AI: aplica efeito de moral nos times envolvidos
+      if (isDerby(fixture.homeTeamId, fixture.awayTeamId) && fixture.stage === 'regular') {
+        const rivalry = getRivalry(fixture.homeTeamId, fixture.awayTeamId);
+        if (rivalry) {
+          const homeWon = result.homeGoals > result.awayGoals;
+          const drew = result.homeGoals === result.awayGoals;
+          [home, away].forEach((team) => {
+            const won = team === home ? homeWon : !homeWon && !drew;
+            const delta = derbyMoraleEffect(won, drew, rivalry.tier);
+            team.squad.forEach((p) => { p.morale = Math.max(0, Math.min(100, p.morale + delta)); });
+          });
         }
       }
     });
@@ -878,6 +894,28 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Avança turno
     save.currentTurn++;
 
+    // Deadline Day — último dia da janela de transferências
+    if (save.currentTurn === 28 || save.currentTurn === 161) {
+      pushNews(save, {
+        type: 'transfer',
+        title: '⚡ DEADLINE DAY — Último dia da janela!',
+        body: 'A janela de transferências fecha hoje. Última chance para reforçar ou liberar jogadores.',
+      });
+      processAITransfers(save); // processamento extra de IA no deadline day
+    }
+
+    // Notícias narrativas (a cada 7 turnos, máx. 1 por ciclo)
+    if (save.currentTurn % 7 === 0) {
+      const narrativeItems = generateNarrativeNews(save);
+      if (narrativeItems.length > 0) {
+        // Evita duplicar a mesma notícia na semana
+        const alreadyHas = (title: string) => save.news.slice(0, 10).some((n) => n.title === title);
+        for (const item of narrativeItems) {
+          if (!alreadyHas(item.title)) { pushNews(save, item); break; }
+        }
+      }
+    }
+
     // Notificação de contratos expirando (uma vez por temporada, no turno 200)
     if (save.currentTurn === 200) {
       const userTeamContracts = save.teams.find((t) => t.id === save.controlledTeamId);
@@ -1084,14 +1122,35 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Bilheteria do jogo em casa
     processTicketRevenue(save, fixtureId);
 
+    // Efeito de clássico/derby
+    const opponentId = isUserHome ? targetFixture.awayTeamId : targetFixture.homeTeamId;
+    const rivalry = getRivalry(save.controlledTeamId, opponentId);
+    if (rivalry) {
+      const userGoals = isUserHome ? result.homeGoals : result.awayGoals;
+      const oppGoals  = isUserHome ? result.awayGoals : result.homeGoals;
+      const won = userGoals > oppGoals;
+      const drew = userGoals === oppGoals;
+      const delta = derbyMoraleEffect(won, drew, rivalry.tier);
+      const userTeamObj = save.teams.find((t) => t.id === save.controlledTeamId);
+      userTeamObj?.squad.forEach((p) => { p.morale = Math.max(0, Math.min(100, p.morale + delta)); });
+      if (won) {
+        save.managerXP = (save.managerXP ?? 0) + 50;
+        save.managerReputation = (save.managerReputation ?? 0) + 30;
+      }
+      const derbyNews = generateDerbyNews(save, save.controlledTeamId, opponentId, userGoals, oppGoals);
+      if (derbyNews) pushNews(save, derbyNews);
+    }
+
     // Resolve mata-matas depois da partida do usuário
     resolveKnockoutsForSave(save);
 
-    pushNews(save, {
-      type: 'match',
-      title: `${home.shortName} ${result.homeGoals} x ${result.awayGoals} ${away.shortName}`,
-      body: `Partida válida pelo ${comp.shortName} concluída.`,
-    });
+    if (!rivalry) {
+      pushNews(save, {
+        type: 'match',
+        title: `${home.shortName} ${result.homeGoals} x ${result.awayGoals} ${away.shortName}`,
+        body: `Partida válida pelo ${comp.shortName} concluída.`,
+      });
+    }
 
     await persistSave(save);
     set({ save });
@@ -1216,13 +1275,36 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
 
     processTicketRevenue(save, fixtureId);
+
+    // Efeito de clássico/derby
+    const isUserHome2 = targetFixture.homeTeamId === save.controlledTeamId;
+    const opponentId2 = isUserHome2 ? targetFixture.awayTeamId : targetFixture.homeTeamId;
+    const rivalry2 = getRivalry(save.controlledTeamId, opponentId2);
+    if (rivalry2) {
+      const userGoals2 = isUserHome2 ? combined.homeGoals : combined.awayGoals;
+      const oppGoals2  = isUserHome2 ? combined.awayGoals : combined.homeGoals;
+      const won2 = userGoals2 > oppGoals2;
+      const drew2 = userGoals2 === oppGoals2;
+      const delta2 = derbyMoraleEffect(won2, drew2, rivalry2.tier);
+      const userTeamObj2 = save.teams.find((t) => t.id === save.controlledTeamId);
+      userTeamObj2?.squad.forEach((p) => { p.morale = Math.max(0, Math.min(100, p.morale + delta2)); });
+      if (won2) {
+        save.managerXP = (save.managerXP ?? 0) + 50;
+        save.managerReputation = (save.managerReputation ?? 0) + 30;
+      }
+      const derbyNews2 = generateDerbyNews(save, save.controlledTeamId, opponentId2, userGoals2, oppGoals2);
+      if (derbyNews2) pushNews(save, derbyNews2);
+    }
+
     resolveKnockoutsForSave(save);
 
-    pushNews(save, {
-      type: 'match',
-      title: `${home.shortName} ${combined.homeGoals} x ${combined.awayGoals} ${away.shortName}`,
-      body: `Partida válida pelo ${comp.shortName} concluída.`,
-    });
+    if (!rivalry2) {
+      pushNews(save, {
+        type: 'match',
+        title: `${home.shortName} ${combined.homeGoals} x ${combined.awayGoals} ${away.shortName}`,
+        body: `Partida válida pelo ${comp.shortName} concluída.`,
+      });
+    }
 
     await persistSave(save);
     set({ save });
