@@ -508,6 +508,30 @@ export interface PromotionRelegation {
   relegated: string[]; // teamIds rebaixados para Série B
 }
 
+// ============================================================
+// Seleção Nacional
+// ============================================================
+
+export interface NationalTeamResult {
+  id: string;
+  turn: number;
+  season: number;
+  opponentId: string;
+  opponentName: string;
+  opponentCountry: string;
+  goals: number;
+  opponentGoals: number;
+  isHome: boolean;
+}
+
+export interface NationalTeamOffer {
+  country: string; // 'BR', 'AR', etc.
+  teamName: string; // 'Brasil', 'Argentina', etc.
+  teamId: string; // 'nt_bra', etc.
+  salary: number; // k/mês
+  expiresAt: number; // turno
+}
+
 export interface SaveGame {
   id: string;
   name: string;
@@ -573,4 +597,10 @@ export interface SaveGame {
   managerJobOffers: ManagerJobOffer[];
   // Promoção/rebaixamento da última temporada
   promotionRelegation?: PromotionRelegation;
+  // Seleção Nacional
+  isNationalTeamManager?: boolean;
+  nationalTeamCountry?: string; // 'BR', 'AR', etc.
+  nationalTeamSquad?: string[]; // player ids convocados (máx 23)
+  nationalTeamResults?: NationalTeamResult[];
+  nationalTeamOffer?: NationalTeamOffer;
 }

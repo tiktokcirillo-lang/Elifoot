@@ -248,40 +248,79 @@ export function processSeasonEnd(save: SaveGame): void {
 
   // ── Promoção e rebaixamento ──────────────────────────────
   const serieBComp = save.competitions.find((c) => c.id.startsWith('serie_b_'));
+  const serieCComp = save.competitions.find((c) => c.id.startsWith('serie_c_'));
+
+  const promoted: string[] = [];
+  const relegated: string[] = [];
+
   if (brasileirao && serieBComp) {
     const brStandings = sortStandings(brasileirao.standings, save.teams);
     const bStandings  = sortStandings(serieBComp.standings, save.teams);
 
-    const relegated = brStandings.slice(16).map((s) => s.teamId); // posições 17-20
-    const promoted  = bStandings.slice(0, 4).map((s) => s.teamId); // top 4 da Série B
+    const relegatedToB = brStandings.slice(16).map((s) => s.teamId); // posições 17-20 → Série B
+    const promotedToA  = bStandings.slice(0, 4).map((s) => s.teamId); // top 4 Série B → Série A
+    const relegatedToC = bStandings.slice(16).map((s) => s.teamId);   // posições 17-20 Série B → Série C
+
+    relegated.push(...relegatedToB, ...relegatedToC);
+    promoted.push(...promotedToA);
 
     save.teams.forEach((t) => {
-      if (relegated.includes(t.id)) t.division = 'B';
-      else if (promoted.includes(t.id)) t.division = 'A';
+      if (relegatedToB.includes(t.id)) t.division = 'B';
+      else if (promotedToA.includes(t.id)) t.division = 'A';
+      else if (relegatedToC.includes(t.id)) t.division = 'C';
     });
+
+    if (serieCComp) {
+      const cStandings = sortStandings(serieCComp.standings, save.teams);
+      const promotedToB = cStandings.slice(0, 4).map((s) => s.teamId); // top 4 Série C → Série B
+      promoted.push(...promotedToB);
+      save.teams.forEach((t) => {
+        if (promotedToB.includes(t.id)) t.division = 'B';
+      });
+
+      if (promotedToB.length > 0) {
+        save.news.unshift({
+          id: nanoid(8),
+          turn: save.currentTurn,
+          type: 'achievement',
+          title: 'Promoção para a Série B!',
+          body: `Promovidos da Série C: ${promotedToB.map((id) => save.teams.find((t) => t.id === id)?.name ?? id).join(', ')}.`,
+          read: false,
+        });
+      }
+      if (relegatedToC.length > 0) {
+        save.news.unshift({
+          id: nanoid(8),
+          turn: save.currentTurn,
+          type: 'general',
+          title: 'Rebaixamento para a Série C',
+          body: `Rebaixados da Série B: ${relegatedToC.map((id) => save.teams.find((t) => t.id === id)?.name ?? id).join(', ')}.`,
+          read: false,
+        });
+      }
+    }
 
     save.promotionRelegation = { promoted, relegated };
 
-    // Notícia de promoção/rebaixamento
-    const promotedNames = promoted.map((id) => save.teams.find((t) => t.id === id)?.name ?? id);
-    const relegatedNames = relegated.map((id) => save.teams.find((t) => t.id === id)?.name ?? id);
-    if (promoted.length > 0) {
+    const promotedToANames = promotedToA.map((id) => save.teams.find((t) => t.id === id)?.name ?? id);
+    const relegatedToBNames = relegatedToB.map((id) => save.teams.find((t) => t.id === id)?.name ?? id);
+    if (promotedToA.length > 0) {
       save.news.unshift({
         id: nanoid(8),
         turn: save.currentTurn,
         type: 'achievement',
         title: 'Promoção para a Série A!',
-        body: `Times promovidos: ${promotedNames.join(', ')}.`,
+        body: `Promovidos da Série B: ${promotedToANames.join(', ')}.`,
         read: false,
       });
     }
-    if (relegated.length > 0) {
+    if (relegatedToB.length > 0) {
       save.news.unshift({
         id: nanoid(8),
         turn: save.currentTurn,
         type: 'general',
         title: 'Rebaixamento para a Série B',
-        body: `Times rebaixados: ${relegatedNames.join(', ')}.`,
+        body: `Rebaixados da Série A: ${relegatedToBNames.join(', ')}.`,
         read: false,
       });
     }

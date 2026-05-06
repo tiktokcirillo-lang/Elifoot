@@ -19,6 +19,7 @@ import ScoutingPage from '@/pages/ScoutingPage';
 import InfrastructurePage from '@/pages/InfrastructurePage';
 import StatsPage from '@/pages/StatsPage';
 import AwardsPage from '@/pages/AwardsPage';
+import NationalTeamPage from '@/pages/NationalTeamPage';
 import Layout from '@/components/Layout';
 
 export default function App() {
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/game/infrastructure" element={<InfrastructurePage />} />
         <Route path="/game/stats" element={<StatsPage />} />
         <Route path="/game/awards" element={<AwardsPage />} />
+        <Route path="/game/national-team" element={<NationalTeamPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

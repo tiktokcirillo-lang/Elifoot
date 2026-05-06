@@ -29,6 +29,7 @@ import {
 import { createCopaDoBrasil, createGroupsKnockout, createPaulistao } from '@/competitions/knockoutFormats';
 import { buildBrasileiraoTeams } from '@/data/brasileiraoTeams';
 import { buildSerieBTeams } from '@/data/serieBTeams';
+import { buildSerieCTeams } from '@/data/serieCTeams';
 import { buildExtraTeams, LIBERTADORES_EXTRA_SEEDS, CHAMPIONS_EXTRA_SEEDS, PAULISTAO_EXTRA_SEEDS, SULAMERICANA_EXTRA_SEEDS, MUNDIAL_EXTRA_SEEDS, COPA_MUNDO_SEEDS } from '@/data/extraTeams';
 import { persistSave, loadSave } from '@/db/database';
 import { resolveKnockoutsForSave } from '@/engine/knockoutEngine';
@@ -159,6 +160,11 @@ interface GameState {
   rejectJobOffer: (offerId: string) => void;
   // Counter-oferta de transferência
   acceptCounterOffer: (listingId: string, bidId: string) => void;
+  // Seleção Nacional
+  acceptNationalTeamOffer: () => void;
+  rejectNationalTeamOffer: () => void;
+  resignNationalTeam: () => void;
+  updateNationalTeamSquad: (playerIds: string[]) => void;
 }
 
 // ============================================================
@@ -282,8 +288,9 @@ function generateInitialCompetitions(
   previousBrasileiraoStandings?: CompetitionStanding[],
 ): Competition[] {
   const brTeamIds = teams.map((t) => t.id);
-  // Série B teams in allTeams
+  // Série B and C teams in allTeams
   const serieBTeamIds = allTeams.filter((t) => t.division === 'B').map((t) => t.id);
+  const serieCTeamIds = allTeams.filter((t) => t.division === 'C').map((t) => t.id);
 
   // ── Brasileirão ────────────────────────────────────────────
   const brasileirao = createBrasileirao({
@@ -446,6 +453,21 @@ function generateInitialCompetitions(
       shortName: 'Série B',
     });
     result.push(serieB);
+  }
+
+  // ── Série C ───────────────────────────────────────────────
+  if (serieCTeamIds.length >= 4) {
+    const serieC = createBrasileirao({
+      teamIds: serieCTeamIds,
+      season,
+      startTurn: 3,
+      turnsBetweenRounds: 7,
+      seed: season * 1000 + 21,
+      id: `serie_c_${season}`,
+      name: 'Campeonato Brasileiro Série C',
+      shortName: 'Série C',
+    });
+    result.push(serieC);
   }
 
   // ── Copa do Mundo (a cada 4 temporadas: 2026, 2030, 2034…) ──
@@ -756,7 +778,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       ...COPA_MUNDO_SEEDS,
     ]);
     const serieBTeams = buildSerieBTeams();
-    const allTeams = [...brTeams, ...extraTeams, ...serieBTeams];
+    const serieCTeams = buildSerieCTeams();
+    const allTeams = [...brTeams, ...extraTeams, ...serieBTeams, ...serieCTeams];
     const resolvedUserTeam = allTeams.find((t) => t.id === teamId);
     if (!resolvedUserTeam) throw new Error('Time não encontrado após setup');
 
@@ -809,6 +832,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       internationalAbsences: [],
       squadMorale: 70,
       managerJobOffers: [],
+      isNationalTeamManager: false,
+      nationalTeamSquad: [],
+      nationalTeamResults: [],
     };
 
     pushNews(save, {
@@ -880,6 +906,17 @@ export const useGameStore = create<GameState>((set, get) => ({
         const existingIds = new Set(loaded.teams.map((t) => t.id));
         newSerieBTeams.filter((t) => !existingIds.has(t.id)).forEach((t) => loaded.teams.push(t));
       }
+      // Compat: add Série C teams if not present
+      const hasSerieCTeams = loaded.teams.some((t) => t.division === 'C');
+      if (!hasSerieCTeams) {
+        const newSerieCTeams = buildSerieCTeams();
+        const existingIds2 = new Set(loaded.teams.map((t) => t.id));
+        newSerieCTeams.filter((t) => !existingIds2.has(t.id)).forEach((t) => loaded.teams.push(t));
+      }
+      // Compat: national team fields
+      if (loaded.isNationalTeamManager === undefined) loaded.isNationalTeamManager = false;
+      if (!loaded.nationalTeamSquad) loaded.nationalTeamSquad = [];
+      if (!loaded.nationalTeamResults) loaded.nationalTeamResults = [];
       set({ save: loaded });
     }
   },
@@ -1237,6 +1274,96 @@ export const useGameStore = create<GameState>((set, get) => ({
           body: 'Jogadores estão de volta ao clube.',
         });
         save.internationalAbsences = save.internationalAbsences.filter((a) => a.returnTurn > save.currentTurn);
+      }
+    }
+
+    // Convite de seleção nacional (rep >= 2000, a cada 56 turnos, sem oferta ativa)
+    if (!save.isNationalTeamManager && !save.nationalTeamOffer && save.currentTurn % 56 === 0) {
+      const rep = save.managerReputation ?? 0;
+      if (rep >= 2000) {
+        const offer: import('@/types').NationalTeamOffer = {
+          country: 'BR',
+          teamName: 'Seleção Brasileira',
+          teamId: 'nt_bra',
+          salary: 500,
+          expiresAt: save.currentTurn + 28,
+        };
+        save.nationalTeamOffer = offer;
+        pushNews(save, {
+          type: 'achievement',
+          title: 'Convite da Seleção Brasileira!',
+          body: 'Você recebeu um convite para comandar a Seleção Brasileira. Acesse a aba Seleção Nacional para responder.',
+        });
+      }
+    }
+
+    // Data FIFA — simula amistoso da seleção (a cada 28 turnos, quando for técnico)
+    if (save.isNationalTeamManager && save.nationalTeamCountry && save.currentTurn % 28 === 0) {
+      const ntSquadIds = save.nationalTeamSquad ?? [];
+      const allNtPlayers = save.teams.flatMap((t) => t.squad.filter((p) => ntSquadIds.includes(p.id)));
+      if (allNtPlayers.length >= 11) {
+        const opponents = [
+          { id: 'nt_arg', name: 'Argentina', country: 'AR' },
+          { id: 'nt_fra', name: 'França', country: 'FR' },
+          { id: 'nt_ger', name: 'Alemanha', country: 'DE' },
+          { id: 'nt_eng', name: 'Inglaterra', country: 'EN' },
+          { id: 'nt_esp', name: 'Espanha', country: 'ES' },
+        ];
+        const opp = opponents[save.currentTurn % opponents.length];
+        const ntTeam = save.teams.find((t) => t.id === save.nationalTeamCountry?.replace('BR', 'nt_bra').replace('AR', 'nt_arg').replace('FR', 'nt_fra')) ?? {
+          id: 'nt_tmp',
+          name: save.nationalTeamCountry === 'BR' ? 'Brasil' : save.nationalTeamCountry ?? 'Seleção',
+          shortName: save.nationalTeamCountry ?? 'NT',
+          city: '',
+          country: '',
+          primaryColor: '#009C3B',
+          secondaryColor: '#FFD700',
+          tier: 'elite' as const,
+          reputation: 85,
+          budget: 0,
+          squad: allNtPlayers,
+          formation: '4-3-3' as const,
+          starting11: allNtPlayers.slice(0, 11).map((p) => p.id),
+          bench: allNtPlayers.slice(11, 16).map((p) => p.id),
+          isUserControlled: false,
+        };
+        const oppTeam = save.teams.find((t) => t.id === opp.id) ?? {
+          id: opp.id,
+          name: opp.name,
+          shortName: opp.country,
+          city: '',
+          country: opp.country,
+          primaryColor: '#666666',
+          secondaryColor: '#FFFFFF',
+          tier: 'elite' as const,
+          reputation: 80,
+          budget: 0,
+          squad: [],
+          formation: '4-4-2' as const,
+          starting11: [],
+          bench: [],
+          isUserControlled: false,
+        };
+        const ntResult = simulateMatch(ntTeam, oppTeam, {});
+        const ntRecord: import('@/types').NationalTeamResult = {
+          id: nanoid(8),
+          turn: save.currentTurn,
+          season: save.season,
+          opponentId: opp.id,
+          opponentName: opp.name,
+          opponentCountry: opp.country,
+          goals: ntResult.homeGoals,
+          opponentGoals: ntResult.awayGoals,
+          isHome: true,
+        };
+        if (!save.nationalTeamResults) save.nationalTeamResults = [];
+        save.nationalTeamResults.push(ntRecord);
+        const outcome = ntResult.homeGoals > ntResult.awayGoals ? 'vitória' : ntResult.homeGoals < ntResult.awayGoals ? 'derrota' : 'empate';
+        pushNews(save, {
+          type: 'match',
+          title: `Data FIFA — Seleção: ${ntResult.homeGoals}x${ntResult.awayGoals} vs ${opp.name}`,
+          body: `A seleção conquistou uma ${outcome} no amistoso internacional.`,
+        });
       }
     }
 
@@ -1747,12 +1874,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     save.teams.push(...missingExtras);
     // Garante que times da Série B estejam em save.teams
     buildSerieBTeams().filter((t) => !knownIds.has(t.id)).forEach((t) => save.teams.push(t));
+    // Garante que times da Série C estejam em save.teams
+    buildSerieCTeams().filter((t) => !knownIds.has(t.id)).forEach((t) => save.teams.push(t));
 
     // Recria competições respeitando promoção/rebaixamento
     const ORIGINAL_SERIE_A = new Set(['fla','pal','cor','sao','flu','atm','bot','cru','gre','int','bah','for','ath','vas','rbb','cri','jvt','cui','gpa','ava']);
-    // Série A: times originais sem division='B', ou times promovidos (division='A')
+    // Série A: times originais sem division='B'/'C', ou times explicitamente promovidos (division='A')
     const brTeams = save.teams.filter(
-      (t) => t.division === 'A' || (ORIGINAL_SERIE_A.has(t.id) && t.division !== 'B'),
+      (t) => t.division === 'A' || (ORIGINAL_SERIE_A.has(t.id) && t.division !== 'B' && t.division !== 'C'),
     );
     const comps = generateInitialCompetitions(
       brTeams,
@@ -1955,6 +2084,57 @@ export const useGameStore = create<GameState>((set, get) => ({
       title: 'Contra-oferta aceita',
       body: `${player?.name ?? 'Jogador'} contratado por R$ ${(bid.counterAmount / 1000).toFixed(1)}M.`,
     });
+    set({ save });
+  },
+
+  // ── Seleção Nacional ─────────────────────────────────────
+
+  acceptNationalTeamOffer() {
+    const state = get();
+    if (!state.save || !state.save.nationalTeamOffer) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const offer = save.nationalTeamOffer!;
+    save.isNationalTeamManager = true;
+    save.nationalTeamCountry = offer.country;
+    save.nationalTeamOffer = undefined;
+    if (!save.nationalTeamSquad) save.nationalTeamSquad = [];
+    if (!save.nationalTeamResults) save.nationalTeamResults = [];
+    pushNews(save, {
+      type: 'achievement',
+      title: `Você aceita comandar a ${offer.teamName}!`,
+      body: `Parabéns, ${save.managerName}! Você agora é o técnico da ${offer.teamName}. Faça sua convocação na aba Seleção Nacional.`,
+    });
+    set({ save });
+  },
+
+  rejectNationalTeamOffer() {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    save.nationalTeamOffer = undefined;
+    set({ save });
+  },
+
+  resignNationalTeam() {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    save.isNationalTeamManager = false;
+    save.nationalTeamCountry = undefined;
+    save.nationalTeamSquad = [];
+    pushNews(save, {
+      type: 'general',
+      title: 'Você deixa o comando da seleção',
+      body: 'Você pediu demissão da seleção nacional.',
+    });
+    set({ save });
+  },
+
+  updateNationalTeamSquad(playerIds) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    save.nationalTeamSquad = playerIds.slice(0, 23);
     set({ save });
   },
 
