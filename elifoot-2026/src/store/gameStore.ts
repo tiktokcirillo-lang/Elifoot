@@ -106,7 +106,7 @@ interface GameState {
   listPlayerForSale: (playerId: string, askingPrice: number) => void;
   withdrawListing: (listingId: string) => void;
   makeBid: (listingId: string, amount: number) => void;
-  makeDirectOffer: (playerId: string, targetTeamId: string, amount: number) => 'ok' | 'already_offered' | 'no_budget' | 'not_found';
+  makeDirectOffer: (playerId: string, targetTeamId: string, amount: number) => 'ok' | 'already_offered' | 'no_budget' | 'not_found' | 'squad_full' | 'countered' | 'rejected';
   acceptBid: (listingId: string, bidId: string) => void;
   rejectBid: (listingId: string, bidId: string) => void;
 
@@ -683,8 +683,8 @@ function executeTransfer(listing: TransferListing, bid: TransferBid, save: SaveG
   const buyer = save.teams.find((t) => t.id === bid.fromTeamId);
   if (!seller || !buyer) return;
 
-  // Bloqueia compra se o time do usuário já tem 30 jogadores
-  if (buyer.isUserControlled && buyer.squad.length >= 30) return;
+  // Bloqueia compra se o time do usuário já tem 35 jogadores
+  if (buyer.isUserControlled && buyer.squad.length >= 35) return;
 
   const playerIdx = seller.squad.findIndex((p) => p.id === listing.playerId);
   if (playerIdx === -1) return;
@@ -1778,6 +1778,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     const userTeam = save.teams.find((t) => t.id === save.controlledTeamId)!;
     if (userTeam.budget < amount) return 'no_budget';
+    if (userTeam.squad.length >= 35) return 'squad_full';
 
     // Reutiliza listing existente ou cria um novo para proposta direta
     let listing = save.transferMarket.find(
@@ -1800,32 +1801,32 @@ export const useGameStore = create<GameState>((set, get) => ({
       return 'already_offered';
     }
 
-    listing.bids.push({
+    const bid: import('@/types').TransferBid = {
       id: nanoid(8),
       fromTeamId: save.controlledTeamId,
       amount,
       turn: save.currentTurn,
       status: 'pending',
-    });
+    };
+    listing.bids.push(bid);
 
-    // IA processa imediatamente: aceita se oferta >= 90% do valor de mercado
+    // IA processa imediatamente
     const threshold = listing.askingPrice * 0.9;
+    let result: 'ok' | 'countered' | 'rejected' = 'ok';
     if (amount >= threshold) {
-      executeTransfer(listing, listing.bids[listing.bids.length - 1], save);
-      if (player) recordTransfer(save, player.name, amount, true);
+      executeTransfer(listing, bid, save);
+      recordTransfer(save, player.name, amount, true);
     } else if (amount >= listing.askingPrice * 0.6) {
-      // Contra-oferta
-      const bid = listing.bids[listing.bids.length - 1];
       bid.status = 'countered';
       bid.counterAmount = Math.round(listing.askingPrice * 0.92);
+      result = 'countered';
     } else {
-      // Rejeita imediatamente se muito baixo
-      listing.bids[listing.bids.length - 1].status = 'rejected';
+      bid.status = 'rejected';
+      result = 'rejected';
     }
 
-    persistSave(save);
     set({ save });
-    return 'ok';
+    return result;
   },
 
   acceptBid(listingId, bidId) {

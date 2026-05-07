@@ -69,15 +69,16 @@ export default function TeamsPage() {
     if (isNaN(millions) || millions <= 0) return;
     const amt = Math.round(millions * 1000);
     const result = makeDirectOffer(offerPlayer.id, selectedTeam.id, amt);
-    if (result === 'ok') {
-      setFeedback(`Proposta de R$ ${millions.toFixed(1)}M enviada para ${selectedTeam.name}!`);
-    } else if (result === 'already_offered') {
-      setFeedback('Você já fez uma proposta por este jogador.');
-    } else if (result === 'no_budget') {
-      setFeedback('Orçamento insuficiente.');
-    } else {
-      setFeedback('Jogador não encontrado.');
-    }
+    const msgs: Record<string, string> = {
+      ok: `✓ Transferência concluída! ${offerPlayer.name} é seu novo jogador.`,
+      countered: `↔ ${selectedTeam.name} fez uma contra-oferta — veja em Transferências > Minhas Propostas.`,
+      rejected: `✗ ${selectedTeam.name} rejeitou a proposta. Tente um valor mais alto.`,
+      already_offered: 'Você já fez uma proposta por este jogador.',
+      no_budget: 'Orçamento insuficiente para esta proposta.',
+      squad_full: 'Elenco cheio (máximo 35 jogadores). Venda ou libere jogadores primeiro.',
+      not_found: 'Jogador não encontrado.',
+    };
+    setFeedback(msgs[result] ?? 'Resultado desconhecido.');
     setOfferPlayer(null);
     setOfferAmount('');
   }
@@ -201,7 +202,7 @@ export default function TeamsPage() {
               </button>
             </div>
             <p className="text-[11px] text-white/30">
-              Propostas acima de 90% do valor são aceitas automaticamente. Abaixo de 60% são rejeitadas imediatamente.
+              ≥ 90% do valor → aceito imediatamente · 60–89% → contra-oferta · &lt; 60% → rejeitado
             </p>
           </div>
         </div>
