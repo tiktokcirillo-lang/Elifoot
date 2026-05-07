@@ -5,7 +5,7 @@ import { useGameStore } from '@/store/gameStore';
 import {
   Home, Trophy, Users, Calendar, LogOut, Save, ArrowRightLeft,
   Dumbbell, DollarSign, Shield, History, Volume2, VolumeX,
-  Handshake, MoreHorizontal, X, AlertTriangle, BarChart2, Briefcase, Search, Building2, TrendingUp, Award, Flag,
+  Handshake, MoreHorizontal, X, AlertTriangle, BarChart2, Briefcase, Search, Building2, TrendingUp, Award, Flag, Globe,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useI18nStore, useT, type Lang } from '@/i18n';
@@ -125,6 +125,7 @@ export default function Layout() {
           <NavItem to="/game/tactics" icon={<Shield className="w-4 h-4" />}>{t('nav_tactics')}</NavItem>
           <NavItem to="/game/sponsors" icon={<Handshake className="w-4 h-4" />}>Patrocínios</NavItem>
           <NavItem to="/game/rankings" icon={<BarChart2 className="w-4 h-4" />}>Rankings</NavItem>
+          <NavItem to="/game/teams" icon={<Globe className="w-4 h-4" />}>Times</NavItem>
           <NavItem to="/game/scouting" icon={<Search className="w-4 h-4" />}>Scouting</NavItem>
           <NavItem to="/game/infrastructure" icon={<Building2 className="w-4 h-4" />}>Infraestrutura</NavItem>
           <NavItem to="/game/stats" icon={<TrendingUp className="w-4 h-4" />}>Estatísticas</NavItem>

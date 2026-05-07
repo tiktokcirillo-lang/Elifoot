@@ -106,6 +106,7 @@ interface GameState {
   listPlayerForSale: (playerId: string, askingPrice: number) => void;
   withdrawListing: (listingId: string) => void;
   makeBid: (listingId: string, amount: number) => void;
+  makeDirectOffer: (playerId: string, targetTeamId: string, amount: number) => 'ok' | 'already_offered' | 'no_budget' | 'not_found';
   acceptBid: (listingId: string, bidId: string) => void;
   rejectBid: (listingId: string, bidId: string) => void;
 
@@ -1756,6 +1757,67 @@ export const useGameStore = create<GameState>((set, get) => ({
       status: 'pending',
     });
     set({ save });
+  },
+
+  makeDirectOffer(playerId, targetTeamId, amount) {
+    const state = get();
+    if (!state.save) return 'not_found';
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+
+    const targetTeam = save.teams.find((t) => t.id === targetTeamId);
+    const player = targetTeam?.squad.find((p) => p.id === playerId);
+    if (!player || !targetTeam) return 'not_found';
+
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId)!;
+    if (userTeam.budget < amount) return 'no_budget';
+
+    // Reutiliza listing existente ou cria um novo para proposta direta
+    let listing = save.transferMarket.find(
+      (l) => l.playerId === playerId && l.status === 'open',
+    );
+    if (!listing) {
+      listing = {
+        id: nanoid(8),
+        playerId,
+        fromTeamId: targetTeamId,
+        askingPrice: player.marketValue,
+        turn: save.currentTurn,
+        status: 'open',
+        bids: [],
+      };
+      save.transferMarket.push(listing);
+    }
+
+    if (listing.bids.some((b) => b.fromTeamId === save.controlledTeamId && b.status === 'pending')) {
+      return 'already_offered';
+    }
+
+    listing.bids.push({
+      id: nanoid(8),
+      fromTeamId: save.controlledTeamId,
+      amount,
+      turn: save.currentTurn,
+      status: 'pending',
+    });
+
+    // IA processa imediatamente: aceita se oferta >= 90% do valor de mercado
+    const threshold = listing.askingPrice * 0.9;
+    if (amount >= threshold) {
+      executeTransfer(listing, listing.bids[listing.bids.length - 1], save);
+      if (player) recordTransfer(save, player.name, amount, true);
+    } else if (amount >= listing.askingPrice * 0.6) {
+      // Contra-oferta
+      const bid = listing.bids[listing.bids.length - 1];
+      bid.status = 'countered';
+      bid.counterAmount = Math.round(listing.askingPrice * 0.92);
+    } else {
+      // Rejeita imediatamente se muito baixo
+      listing.bids[listing.bids.length - 1].status = 'rejected';
+    }
+
+    persistSave(save);
+    set({ save });
+    return 'ok';
   },
 
   acceptBid(listingId, bidId) {

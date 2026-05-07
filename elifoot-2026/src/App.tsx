@@ -24,6 +24,7 @@ const InfrastructurePage = lazy(() => import('@/pages/InfrastructurePage'));
 const StatsPage        = lazy(() => import('@/pages/StatsPage'));
 const AwardsPage       = lazy(() => import('@/pages/AwardsPage'));
 const NationalTeamPage = lazy(() => import('@/pages/NationalTeamPage'));
+const TeamsPage        = lazy(() => import('@/pages/TeamsPage'));
 
 function PageLoader() {
   return (
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/game/stats" element={<StatsPage />} />
           <Route path="/game/awards" element={<AwardsPage />} />
           <Route path="/game/national-team" element={<NationalTeamPage />} />
+          <Route path="/game/teams" element={<TeamsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
