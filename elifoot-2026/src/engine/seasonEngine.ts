@@ -15,9 +15,10 @@ import { clamp, createRng } from '@/utils/random';
 // ============================================================
 
 export function isSeasonOver(save: SaveGame): boolean {
-  const brasileirao = save.competitions.find((c) => c.format === 'round_robin');
-  if (!brasileirao) return false;
-  return brasileirao.finished || brasileirao.fixtures.every((f) => f.played);
+  const roundRobins = save.competitions.filter((c) => c.format === 'round_robin');
+  if (roundRobins.length === 0) return false;
+  // Aguarda TODAS as ligas terminarem para garantir standings corretos no rebaixamento
+  return roundRobins.every((c) => c.finished || c.fixtures.every((f) => f.played));
 }
 
 // ============================================================
@@ -26,12 +27,28 @@ export function isSeasonOver(save: SaveGame): boolean {
 
 export function generateBoardObjectives(userTeam: Team): BoardObjective[] {
   const tier = userTeam.tier;
+  const division = userTeam.division ?? 'A';
   const objectives: BoardObjective[] = [];
 
   const add = (type: ObjectiveType, description: string, targetValue?: number) => {
     objectives.push({ id: nanoid(8), type, description, targetValue, status: 'pending' });
   };
 
+  // Série C — objetivo principal é subir para a B
+  if (division === 'C') {
+    add('league_position', 'Promova para a Série B (top 4)', 4);
+    add('avoid_relegation', 'Permaneça na Série C (top 16)');
+    return objectives;
+  }
+
+  // Série B — objetivo principal é subir para a A
+  if (division === 'B') {
+    add('league_position', 'Promova para a Série A (top 4)', 4);
+    add('avoid_relegation', 'Permaneça na Série B (top 16)');
+    return objectives;
+  }
+
+  // Série A — objetivos por tier
   if (tier === 'elite') {
     add('league_title', 'Vença o Brasileirão');
     add('qualify_libertadores', 'Classifique-se para a Libertadores (top 5)');
@@ -56,20 +73,32 @@ export function generateBoardObjectives(userTeam: Team): BoardObjective[] {
 // ============================================================
 
 export function processSeasonEnd(save: SaveGame): void {
-  const brasileirao = save.competitions.find((c) => c.format === 'round_robin');
+  // Determina a divisão e competição principal do usuário
+  const userTeamRef = save.teams.find((t) => t.id === save.controlledTeamId);
+  const userDivision = userTeamRef?.division ?? 'A';
+
+  const brasileirao = save.competitions.find(
+    (c) => c.format === 'round_robin' && !c.id.startsWith('serie_b_') && !c.id.startsWith('serie_c_'),
+  );
+  const serieBComp = save.competitions.find((c) => c.id.startsWith('serie_b_'));
+  const serieCComp = save.competitions.find((c) => c.id.startsWith('serie_c_'));
   const copa = save.competitions.find((c) => c.format === 'pure_knockout');
 
-  const standings = brasileirao
-    ? sortStandings(brasileirao.standings, save.teams)
-    : [];
+  // Competição do usuário — usada para posição e objetivos
+  const userComp =
+    userDivision === 'B' ? (serieBComp ?? brasileirao)
+    : userDivision === 'C' ? (serieCComp ?? brasileirao)
+    : brasileirao;
+
+  const standings = userComp ? sortStandings(userComp.standings, save.teams) : [];
   const userPosition = standings.findIndex((s) => s.teamId === save.controlledTeamId) + 1;
 
-  // Avaliar objetivos
+  // Avaliar objetivos contra a competição correta do usuário
   save.boardObjectives.forEach((obj) => {
     if (obj.status !== 'pending') return;
     switch (obj.type) {
       case 'league_title':
-        obj.status = brasileirao?.championId === save.controlledTeamId ? 'achieved' : 'failed';
+        obj.status = userComp?.championId === save.controlledTeamId ? 'achieved' : 'failed';
         break;
       case 'league_position':
         obj.status = userPosition > 0 && userPosition <= (obj.targetValue ?? 4) ? 'achieved' : 'failed';
@@ -81,8 +110,8 @@ export function processSeasonEnd(save: SaveGame): void {
         obj.status = copa?.championId === save.controlledTeamId ? 'achieved' : 'failed';
         break;
       case 'qualify_libertadores':
-        // 2026: G5 — top 5 vão à fase de grupos da Libertadores
-        obj.status = userPosition > 0 && userPosition <= 5 ? 'achieved' : 'failed';
+        // G5 — apenas para times na Série A
+        obj.status = userDivision === 'A' && userPosition > 0 && userPosition <= 5 ? 'achieved' : 'failed';
         break;
     }
   });
@@ -247,8 +276,7 @@ export function processSeasonEnd(save: SaveGame): void {
   save.seasonAwards.push(award);
 
   // ── Promoção e rebaixamento ──────────────────────────────
-  const serieBComp = save.competitions.find((c) => c.id.startsWith('serie_b_'));
-  const serieCComp = save.competitions.find((c) => c.id.startsWith('serie_c_'));
+  // serieBComp / serieCComp já declarados no início da função
 
   const promoted: string[] = [];
   const relegated: string[] = [];
