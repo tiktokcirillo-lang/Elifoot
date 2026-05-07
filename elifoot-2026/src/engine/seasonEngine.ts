@@ -6,7 +6,14 @@ import type {
   ObjectiveType,
   SeasonAward,
   Player,
+  NewsItem,
 } from '@/types';
+
+function pushNews(save: SaveGame, news: Omit<NewsItem, 'id' | 'read' | 'turn'>): void {
+  if (!save.news) save.news = [];
+  save.news.unshift({ ...news, id: nanoid(8), turn: save.currentTurn, read: false });
+  if (save.news.length > 60) save.news.length = 60;
+}
 import { sortStandings } from '@/competitions/brasileirao';
 import { autoPickStartingEleven, generatePlayer, generateYouthPlayer } from '@/engine/playerGenerator';
 import { clamp, createRng } from '@/utils/random';
@@ -519,12 +526,21 @@ export function startNewSeason(save: SaveGame): void {
 
   // defensive_specialist: +3 DEF para DFs e GKs do elenco
   if (skills.includes('defensive_specialist') && userTeam) {
+    let count = 0;
     userTeam.squad.forEach((p) => {
       if (p.position === 'DF' || p.position === 'GK') {
         p.defense = clamp(p.defense + 3, 1, 99);
         p.overall = recalcPlayerOverall(p);
+        count++;
       }
     });
+    if (count > 0) {
+      pushNews(save, {
+        type: 'achievement',
+        title: 'Especialista Defensivo — efeito aplicado',
+        body: `${count} zagueiro(s) e goleiro(s) receberam +3 DEF no início da temporada ${save.season}.`,
+      });
+    }
   }
 
   // ── Limpar mercado e histórico financeiro ─────────────────
@@ -552,4 +568,11 @@ export function startNewSeason(save: SaveGame): void {
   save.youthPlayers = Array.from({ length: youthCount }, (_, i) =>
     generateYouthPlayer(save.season * 300 + i + 1, save.season, potentialBonus),
   );
+
+  const qualityLabel = ['padrão (55–70)', 'boa (60–75)', 'alta (65–80)', 'excepcional (70–85)'][youthLevel] ?? 'padrão';
+  pushNews(save, {
+    type: 'general',
+    title: `Academia revelou ${youthCount} jovens talentos`,
+    body: `A base do clube revelou ${youthCount} jovens para a temporada ${save.season}. Qualidade de potencial: ${qualityLabel} OVR. Acesse o Elenco para analisá-los.`,
+  });
 }

@@ -256,11 +256,22 @@ export default function SquadPage() {
       ))}
 
       {/* Academia (base) */}
-      {save.youthPlayers && save.youthPlayers.length > 0 && (
+      {save.youthPlayers && save.youthPlayers.length > 0 && (() => {
+        const youthLevel = (save.infrastructure?.youth ?? 0) as 0 | 1 | 2 | 3;
+        const qualityLabels = ['55–70', '60–75', '65–80', '70–85'];
+        const qualityLabel = qualityLabels[youthLevel];
+        return (
         <div className="panel p-4">
-          <h3 className="display-font text-xl mb-1 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-pitch-400" /> Base / Academia
-          </h3>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="display-font text-xl flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-pitch-400" /> Base / Academia
+            </h3>
+            <div className="text-xs text-white/40 text-right">
+              <span className="bg-white/5 border border-white/10 rounded px-2 py-1">
+                Nível {youthLevel}/3 · {3 + youthLevel} jovens/temporada · Potencial {qualityLabel} OVR
+              </span>
+            </div>
+          </div>
           <p className="text-xs text-white/50 mb-3">Jovens promissores prontos para subir ao time principal.</p>
           <ul className="space-y-2">
             {save.youthPlayers.map((p) => (
@@ -287,7 +298,8 @@ export default function SquadPage() {
             ))}
           </ul>
         </div>
-      )}
+        );
+      })()}
       {/* Modal negociar contrato */}
       {negotiatePlayer && (() => {
         const p = negotiatePlayer;

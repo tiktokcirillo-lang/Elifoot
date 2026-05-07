@@ -25,6 +25,14 @@ export default function TransferPage() {
         <div className="text-sm text-white/60">Dia atual: {save.currentTurn}</div>
       </div>
 
+      {/* Negociador Mestre ativo */}
+      {(save.unlockedSkills ?? []).includes('master_negotiator') && (
+        <div className="panel p-3 border border-emerald-500/40 bg-emerald-900/20 flex items-center gap-2 text-sm text-emerald-300">
+          <Handshake className="w-4 h-4 shrink-0" />
+          <span><strong>Negociador Mestre ativo</strong> — preços de transferência direta são <strong>15% menores</strong> para você.</span>
+        </div>
+      )}
+
       {/* Deadline Day banner */}
       {(save.currentTurn === 28 || save.currentTurn === 161) && (
         <div className="panel p-4 border-2 border-yellow-500/60 bg-yellow-500/10 animate-pulse">

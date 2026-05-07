@@ -27,6 +27,9 @@ export default function TrainingPage() {
 
   const plan = save.trainingPlan;
   const nextTrainingTurn = Math.ceil(save.currentTurn / 7) * 7;
+  const skills = save.unlockedSkills ?? [];
+  const hasTalentCoach = skills.includes('talent_coach');
+  const hasDefensiveSpec = skills.includes('defensive_specialist');
 
   return (
     <div className="space-y-4">
@@ -41,6 +44,27 @@ export default function TrainingPage() {
           </span>
         </div>
       </div>
+
+      {/* Habilidades do técnico ativas */}
+      {(hasTalentCoach || hasDefensiveSpec) && (
+        <div className="panel p-4 border border-pitch-500/20 bg-pitch-900/20">
+          <div className="text-xs uppercase tracking-wider text-white/40 mb-2">Habilidades do Técnico Ativas</div>
+          <div className="flex flex-wrap gap-2">
+            {hasTalentCoach && (
+              <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2 text-xs">
+                <span className="text-green-400 font-bold">🎓 Coach de Jovens</span>
+                <span className="text-white/60">jogadores ≤23 anos crescem <span className="text-green-400 font-semibold">+40%</span> por semana</span>
+              </div>
+            )}
+            {hasDefensiveSpec && (
+              <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-lg px-3 py-2 text-xs">
+                <span className="text-purple-400 font-bold">🛡 Especialista Defensivo</span>
+                <span className="text-white/60">GK/DF recebem <span className="text-purple-400 font-semibold">+3 DEF</span> ao início de cada temporada</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tipo de treinamento */}
       <div className="panel p-5">
@@ -128,7 +152,12 @@ export default function TrainingPage() {
                             <span className="text-[10px] text-red-400 bg-red-400/10 px-1 rounded">Lesão</span>
                           )}
                         </div>
-                        <div className="text-xs text-white/40">{p.age} anos</div>
+                        <div className="text-xs text-white/40 flex items-center gap-1">
+                          {p.age} anos
+                          {hasTalentCoach && p.age <= 23 && (
+                            <span className="text-[9px] bg-green-500/20 text-green-400 px-1 rounded font-bold">+40%</span>
+                          )}
+                        </div>
                       </td>
                       <td className="text-center py-2 font-bold">{p.overall}</td>
                       <td className="text-center py-2">{p.attack}</td>
