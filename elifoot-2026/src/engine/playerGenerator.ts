@@ -105,6 +105,13 @@ export function generatePlayer({
                :             0  + Math.floor(rng() * 3);
   const potential = clamp(overall + potGap, overall, 95);
 
+  // Cláusula rescisória: jogadores com overall >= 75 e em contratos longos
+  const contractYears = Math.floor(rng() * 4);
+  const hasClause = overall >= 75 && contractYears >= 2 && rng() < 0.7;
+  const releaseClause = hasClause
+    ? Math.round(marketValue * (1.3 + rng() * 0.5)) // 130-180% do valor de mercado
+    : undefined;
+
   return {
     id: nanoid(8),
     name: generateName(rng),
@@ -119,11 +126,14 @@ export function generatePlayer({
     stamina,
     overall,
     potential,
+    releaseClause,
     morale: 70 + Math.floor(rng() * 20),
     fitness: 90 + Math.floor(rng() * 10),
     yellowCardsInComp: {},
     appearancesInComp: {},
-    contractUntil: 2026 + Math.floor(rng() * 4),
+    injuryHistory: [],
+    injuryProneness: 0,
+    contractUntil: 2026 + contractYears,
     wageMonthly: wage,
     marketValue,
     stats: {
@@ -141,11 +151,13 @@ export function generatePlayer({
 // Gera um jovem da base (16-18 anos, overall baixo, alto potencial)
 // ============================================================
 
-export function generateYouthPlayer(seed: number, baseSeason = 2026): Player {
+export function generateYouthPlayer(seed: number, baseSeason = 2026, potentialBonus = 0): Player {
   const rng = createRng(seed);
   const positions: Position[] = ['GK', 'DF', 'MF', 'FW'];
   const position = positions[Math.floor(rng() * 4)];
-  const age = 16 + Math.floor(rng() * 3); // 16, 17 ou 18 anos
+  // Academia avançada pode revelar jogadores mais novos (16-17 anos)
+  const minAge = potentialBonus >= 6 ? 16 : 17;
+  const age = minAge + Math.floor(rng() * (19 - minAge)); // 16/17 a 18 anos
 
   const base = 42 + Math.floor(rng() * 16); // overall bruto 42-58
   const dist = (mod: number) =>
@@ -167,7 +179,8 @@ export function generateYouthPlayer(seed: number, baseSeason = 2026): Player {
   }
 
   const overall = clamp(base, 40, 65);
-  const potential = clamp(base + 15 + Math.floor(rng() * 20), overall + 10, 90);
+  // Academia de elite gera jogadores com maior potencial
+  const potential = clamp(base + 15 + potentialBonus + Math.floor(rng() * 20), overall + 10, 92);
   const wage = 2 + Math.floor(rng() * 3);
   const marketValue = Math.round(wage * 24);
 
@@ -189,6 +202,8 @@ export function generateYouthPlayer(seed: number, baseSeason = 2026): Player {
     fitness: 90 + Math.floor(rng() * 10),
     yellowCardsInComp: {},
     appearancesInComp: {},
+    injuryHistory: [],
+    injuryProneness: 0,
     contractUntil: baseSeason + 1 + Math.ceil(rng() * 2),
     wageMonthly: wage,
     marketValue,

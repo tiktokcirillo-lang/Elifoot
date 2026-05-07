@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import type { MatchEvent, MatchResult, TacticalPosture, PressingLevel } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ArrowRightLeft, Mic, MicOff, Volume2, VolumeX, Star, Flame } from 'lucide-react';
+import { ChevronRight, ArrowRightLeft, Mic, MicOff, Volume2, VolumeX, Star, Flame, Shield, Zap, Activity } from 'lucide-react';
 import MatchField from '@/components/MatchField';
 import SharedTeamBadge from '@/components/TeamBadge';
 import { soundEngine } from '@/engine/soundEngine';
@@ -259,6 +259,14 @@ export default function MatchPage() {
               </div>
             </div>
           )}
+
+          {/* Preview do adversário */}
+          <OpponentPreview
+            opponent={fixture.homeTeamId === save.controlledTeamId ? away : home}
+            userTeam={fixture.homeTeamId === save.controlledTeamId ? home : away}
+            userTactics={tactics}
+            isUserHome={fixture.homeTeamId === save.controlledTeamId}
+          />
 
           {/* Controles de som e narrador */}
           <div className="flex gap-2 mb-3">
@@ -696,6 +704,87 @@ function TeamBadge({ name, shortName, bg, fg, id }: { id: string; name: string; 
     <div className="text-center">
       <SharedTeamBadge team={{ id, shortName, primaryColor: bg, secondaryColor: fg }} size={80} className="mx-auto" />
       <div className="text-xs text-white/70 mt-2 max-w-[100px] truncate">{name}</div>
+    </div>
+  );
+}
+
+// ── Componente de prévia do adversário ────────────────────────
+
+import type { Team, TacticalSetup } from '@/types';
+
+function calcTeamStrengths(team: Team): { atk: number; mid: number; def: number } {
+  const avg = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 50;
+  const starting = team.starting11.length >= 11
+    ? team.starting11.map((id) => team.squad.find((p) => p.id === id)).filter(Boolean) as typeof team.squad
+    : [...team.squad].sort((a, b) => b.overall - a.overall).slice(0, 11);
+  const gks = starting.filter((p) => p.position === 'GK');
+  const dfs = starting.filter((p) => p.position === 'DF');
+  const mfs = starting.filter((p) => p.position === 'MF');
+  const fws = starting.filter((p) => p.position === 'FW');
+  const atk = Math.round(avg(fws.map((p) => p.attack)) * 0.6 + avg(mfs.map((p) => p.attack)) * 0.4);
+  const mid = Math.round(avg(mfs.map((p) => p.technique)));
+  const def = Math.round(avg(dfs.map((p) => p.defense)) * 0.7 + avg(gks.map((p) => p.defense)) * 0.3);
+  return { atk, mid, def };
+}
+
+function StrengthBar({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+  const color = value >= 75 ? 'bg-red-500' : value >= 65 ? 'bg-yellow-500' : 'bg-green-500';
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-white/40 w-4">{icon}</span>
+      <span className="text-white/60 w-12">{label}</span>
+      <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${value}%` }} />
+      </div>
+      <span className={`w-6 font-bold text-right ${value >= 75 ? 'text-red-400' : value >= 65 ? 'text-yellow-400' : 'text-green-400'}`}>{value}</span>
+    </div>
+  );
+}
+
+function OpponentPreview({
+  opponent, userTeam, userTactics, isUserHome,
+}: { opponent: Team; userTeam: Team; userTactics: TacticalSetup | undefined; isUserHome: boolean }) {
+  const oppStr = calcTeamStrengths(opponent);
+  const userStr = calcTeamStrengths(userTeam);
+
+  const oppIsAttacking = oppStr.atk > oppStr.def + 5;
+  const oppIsDefensive = oppStr.def > oppStr.atk + 5;
+
+  // Recomendação de contra-tática
+  let recommendation = '';
+  let recPosture: string | null = null;
+  if (oppIsAttacking) {
+    recommendation = `Adversário joga muito pelo ataque (${oppStr.atk}). Considere postura Defensiva para neutralizar as entradas.`;
+    recPosture = 'defensive';
+  } else if (oppIsDefensive) {
+    recommendation = `Adversário é sólido na defesa (${oppStr.def}). Postura Ofensiva com pressão alta pode criar mais espaços.`;
+    recPosture = 'attack';
+  } else {
+    recommendation = `Adversário equilibrado. Postura Equilibrada é uma escolha segura. Veja as fraquezas no meio-campo (${oppStr.mid}).`;
+  }
+
+  const postureMatch = userTactics?.posture === recPosture;
+
+  return (
+    <div className="bg-midnight-700 rounded-xl p-4 mb-4 text-left border border-white/5">
+      <div className="flex items-center gap-2 mb-3">
+        <Shield className="w-4 h-4 text-pitch-400" />
+        <span className="text-xs font-semibold text-white/70 uppercase tracking-wider">Análise do Adversário — {opponent.name}</span>
+      </div>
+      <div className="space-y-2 mb-3">
+        <StrengthBar label="Ataque" value={oppStr.atk} icon={<Zap className="w-3 h-3" />} />
+        <StrengthBar label="Meio" value={oppStr.mid} icon={<Activity className="w-3 h-3" />} />
+        <StrengthBar label="Defesa" value={oppStr.def} icon={<Shield className="w-3 h-3" />} />
+      </div>
+      <div className={`text-xs rounded-lg px-3 py-2 flex items-start gap-2 ${postureMatch ? 'bg-green-500/10 border border-green-500/30 text-green-300' : 'bg-white/5 text-white/50'}`}>
+        {postureMatch && <span className="text-green-400 shrink-0">✓</span>}
+        <span>{recommendation}</span>
+      </div>
+      {/* Comparativo */}
+      <div className="mt-2 text-xs text-white/30 text-right">
+        Força geral: {opponent.shortName} {Math.round((oppStr.atk + oppStr.mid + oppStr.def) / 3)} vs {userTeam.shortName} {Math.round((userStr.atk + userStr.mid + userStr.def) / 3)}
+        {isUserHome ? ' · Você joga em casa' : ' · Você joga fora'}
+      </div>
     </div>
   );
 }

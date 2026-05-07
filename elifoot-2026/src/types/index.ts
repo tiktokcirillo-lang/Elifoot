@@ -64,6 +64,7 @@ export interface Infrastructure {
   training: InfrastructureLevel;
   medical: InfrastructureLevel;
   youth: InfrastructureLevel;
+  stadium: InfrastructureLevel; // expansão do estádio: 0 = original, 3 = máximo
 }
 
 // ============================================================
@@ -231,7 +232,11 @@ export interface Player {
   contractUntil: number; // ano
   wageMonthly: number; // em milhares
   marketValue: number; // em milhares
+  releaseClause?: number; // cláusula rescisória em milhares (se definida)
   leavingFree?: boolean; // jogador recusou renovação e sai ao fim da temporada
+  // Histórico de lesões
+  injuryHistory?: Array<{ season: number; weeksOut: number }>;
+  injuryProneness?: number; // 0-100: cresce com lesões sérias, aumenta risco futuro
   // Estatísticas de temporada
   stats: PlayerSeasonStats;
 }
@@ -266,6 +271,8 @@ export interface Team {
   bench: string[]; // ids da reserva
   isUserControlled: boolean;
   division?: 'A' | 'B' | 'C'; // divisão atual do time
+  stadiumName?: string; // nome do estádio
+  stadiumCapacity?: number; // capacidade atual (em pessoas)
 }
 
 export type Formation =

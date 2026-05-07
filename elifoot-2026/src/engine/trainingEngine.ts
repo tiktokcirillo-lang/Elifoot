@@ -1,6 +1,17 @@
 import type { Player, Team, TrainingPlan } from '@/types';
 import { clamp, createRng } from '@/utils/random';
 
+/** Aplica lesão a um jogador: seta injuredUntil, atualiza histórico e proneness. */
+export function applyInjury(player: Player, durationTurns: number, currentTurn: number, season: number): void {
+  player.injuredUntil = currentTurn + durationTurns;
+  const weeksOut = Math.round(durationTurns / 7);
+  if (!player.injuryHistory) player.injuryHistory = [];
+  player.injuryHistory.push({ season, weeksOut });
+  // Proneness cresce com lesões longas: +5 por semana fora (cap 80)
+  const proneDelta = Math.min(weeksOut * 5, 25);
+  player.injuryProneness = Math.min(80, (player.injuryProneness ?? 0) + proneDelta);
+}
+
 // ============================================================
 // Aplica efeito de treinamento semanal ao elenco
 // ============================================================
@@ -111,16 +122,22 @@ export function applyWeeklyTraining(
   team: Team,
   plan: TrainingPlan,
   currentTurn: number,
+  season = 1,
+  unlockedSkills: string[] = [],
 ): { injuredPlayerIds: string[] } {
   const effect = EFFECTS[plan.type];
   const statMult = INTENSITY_MULT[plan.intensity];
   const fitMod = INTENSITY_FITNESS_MOD[plan.intensity];
   const injMod = INTENSITY_INJURY_MOD[plan.intensity];
   const injuredIds: string[] = [];
+  const hasTalentCoach = unlockedSkills.includes('talent_coach');
 
   team.squad.forEach((player, idx) => {
     const rng = createRng(currentTurn * 1000 + player.id.charCodeAt(0) + idx);
-    const growth = growthMultiplier(player.age);
+    const baseGrowth = growthMultiplier(player.age);
+    // talent_coach: +40% crescimento para jogadores ≤ 23 anos
+    const talentBonus = hasTalentCoach && player.age <= 23 ? 1.4 : 1.0;
+    const growth = baseGrowth * talentBonus;
 
     // Aplicar ganhos de atributo (somente se houver crescimento)
     if (growth > 0) {
@@ -137,11 +154,13 @@ export function applyWeeklyTraining(
     const fitChange = effect.fitnessChange * fitMod;
     player.fitness = clamp(Math.round(player.fitness + fitChange), 10, 100);
 
-    // Risco de lesão
-    const injRisk = effect.injuryRisk * injMod;
+    // Risco de lesão: base do treino + bônus de histórico (proneness) + overplay
+    const pronessBonus = (player.injuryProneness ?? 0) / 100 * 0.02; // até +2% por proneness
+    const overplayBonus = player.fitness < 50 ? 0.015 : 0; // cansaço extremo = risco adicional
+    const injRisk = (effect.injuryRisk + pronessBonus + overplayBonus) * injMod;
     if (injRisk > 0 && rng() < injRisk && !player.injuredUntil) {
-      const duration = Math.ceil(rng() * 14) + 7; // 7-21 dias
-      player.injuredUntil = currentTurn + duration;
+      const duration = Math.ceil(rng() * 21) + 7; // 7-28 dias
+      applyInjury(player, duration, currentTurn, season);
       injuredIds.push(player.id);
     }
   });

@@ -42,10 +42,11 @@ import { applyWeeklyTraining } from '@/engine/trainingEngine';
 import { autoPickStartingEleven, generateYouthPlayer, generateSquad } from '@/engine/playerGenerator';
 import { processWeeklyFinances, processTicketRevenue, recordTransfer, getWageSummary } from '@/engine/financeEngine';
 import { isSeasonOver, processSeasonEnd, generateBoardObjectives, startNewSeason } from '@/engine/seasonEngine';
-import { createRng } from '@/utils/random';
+import { createRng, clamp } from '@/utils/random';
 import { generateAvailableScouts, generateScoutReport, generateLoanOffers } from '@/engine/scoutingEngine';
 import { generateNarrativeNews, generateDerbyNews, derbyMoraleEffect } from '@/engine/storyEngine';
 import { getRivalry, isDerby } from '@/data/rivalries';
+import { getStadiumInfo } from '@/data/stadiumData';
 
 // ============================================================
 // Utilidades exportadas
@@ -870,6 +871,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     const serieBTeams = buildSerieBTeams();
     const serieCTeams = buildSerieCTeams();
     const allTeams = [...brTeams, ...euLeagueTeams, ...extraTeamsFiltered, ...serieBTeams, ...serieCTeams];
+
+    // Inicializa nome e capacidade do estádio para todos os times
+    allTeams.forEach((t) => {
+      if (!t.stadiumName || !t.stadiumCapacity) {
+        const info = getStadiumInfo(t.id, t.shortName, t.tier);
+        t.stadiumName = info.name;
+        t.stadiumCapacity = info.capacity;
+      }
+    });
+
     const resolvedUserTeam = allTeams.find((t) => t.id === teamId);
     if (!resolvedUserTeam) throw new Error('Time não encontrado após setup');
 
@@ -918,7 +929,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       playerInteractions: [],
       matchRatings: [],
       fanSatisfaction: 50,
-      infrastructure: { training: 0, medical: 0, youth: 0 },
+      infrastructure: { training: 0, medical: 0, youth: 0, stadium: 0 },
       internationalAbsences: [],
       squadMorale: 70,
       managerJobOffers: [],
@@ -981,7 +992,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!loaded.playerInteractions) loaded.playerInteractions = [];
       if (!loaded.matchRatings) loaded.matchRatings = [];
       if (loaded.fanSatisfaction === undefined) loaded.fanSatisfaction = 50;
-      if (!loaded.infrastructure) loaded.infrastructure = { training: 0, medical: 0, youth: 0 };
+      if (!loaded.infrastructure) loaded.infrastructure = { training: 0, medical: 0, youth: 0, stadium: 0 };
+      if (loaded.infrastructure.stadium === undefined) loaded.infrastructure.stadium = 0;
       if (!loaded.internationalAbsences) loaded.internationalAbsences = [];
       if (loaded.squadMorale === undefined) loaded.squadMorale = 70;
       if (!loaded.managerJobOffers) loaded.managerJobOffers = [];
@@ -1008,8 +1020,20 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!loaded.nationalTeamSquad) loaded.nationalTeamSquad = [];
       if (!loaded.nationalTeamResults) loaded.nationalTeamResults = [];
       if (loaded.wageOverBudgetWeeks === undefined) loaded.wageOverBudgetWeeks = 0;
-      // Compat: leavingFree on players
-      loaded.teams.forEach((t) => t.squad.forEach((p) => { if (p.leavingFree === undefined) p.leavingFree = false; }));
+      // Compat: leavingFree, injuryHistory, injuryProneness, releaseClause on players
+      loaded.teams.forEach((t) => {
+        // Stadium compat for teams
+        if (!t.stadiumName || !t.stadiumCapacity) {
+          const info = getStadiumInfo(t.id, t.shortName, t.tier);
+          if (!t.stadiumName) t.stadiumName = info.name;
+          if (!t.stadiumCapacity) t.stadiumCapacity = info.capacity;
+        }
+        t.squad.forEach((p) => {
+          if (p.leavingFree === undefined) p.leavingFree = false;
+          if (!p.injuryHistory) p.injuryHistory = [];
+          if (p.injuryProneness === undefined) p.injuryProneness = 0;
+        });
+      });
       set({ save: loaded });
     }
   },
@@ -1177,7 +1201,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (save.currentTurn % 7 === 0) {
       const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
       if (userTeam) {
-        const { injuredPlayerIds } = applyWeeklyTraining(userTeam, save.trainingPlan, save.currentTurn);
+        const { injuredPlayerIds } = applyWeeklyTraining(userTeam, save.trainingPlan, save.currentTurn, save.season, save.unlockedSkills ?? []);
         if (injuredPlayerIds.length > 0) {
           injuredPlayerIds.forEach((pid) => {
             const p = userTeam.squad.find((x) => x.id === pid);
@@ -1574,14 +1598,24 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (derbyNews) pushNews(save, derbyNews);
     }
 
-    // Fan satisfaction após partida
+    // Fan satisfaction e board confidence após partida (estilo importa)
     {
       const userGoalsFan = isUserHome ? result.homeGoals : result.awayGoals;
       const oppGoalsFan  = isUserHome ? result.awayGoals : result.homeGoals;
       const derbyMult = rivalry ? (rivalry.tier === 'classico' ? 2 : 1.5) : 1;
-      const fanDelta = userGoalsFan > oppGoalsFan ? Math.round(5 * derbyMult)
-        : userGoalsFan < oppGoalsFan ? Math.round(-7 * derbyMult) : 1;
-      save.fanSatisfaction = Math.max(0, Math.min(100, (save.fanSatisfaction ?? 50) + fanDelta));
+      const isAttacking = tactical.posture === 'attack';
+      const isDefensive = tactical.posture === 'defensive';
+      const won = userGoalsFan > oppGoalsFan;
+      const lost = userGoalsFan < oppGoalsFan;
+      // Torcida: ama gols e jogo ofensivo
+      const fanBase = won ? 5 : lost ? -7 : 1;
+      const fanStyleBonus = isAttacking ? 2 : isDefensive ? -2 : 0;
+      const fanGoalBonus = Math.min(Math.max(userGoalsFan - 1, 0), 3);
+      const fanDelta = Math.round((fanBase + fanStyleBonus + fanGoalBonus) * derbyMult);
+      save.fanSatisfaction = clamp((save.fanSatisfaction ?? 50) + fanDelta, 0, 100);
+      // Diretoria: quer resultado, não liga para estilo
+      const boardDelta = Math.round((won ? 3 : lost ? -5 : -1) * derbyMult);
+      save.boardConfidence = clamp((save.boardConfidence ?? 60) + boardDelta, 0, 100);
     }
 
     // Resolve mata-matas depois da partida do usuário
@@ -1739,14 +1773,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (derbyNews2) pushNews(save, derbyNews2);
     }
 
-    // Fan satisfaction após partida (segundo tempo)
+    // Fan satisfaction e board confidence após segundo tempo (estilo importa)
     {
       const userGoalsFan2 = isUserHome2 ? combined.homeGoals : combined.awayGoals;
       const oppGoalsFan2  = isUserHome2 ? combined.awayGoals : combined.homeGoals;
       const derbyMult2 = rivalry2 ? (rivalry2.tier === 'classico' ? 2 : 1.5) : 1;
-      const fanDelta2 = userGoalsFan2 > oppGoalsFan2 ? Math.round(5 * derbyMult2)
-        : userGoalsFan2 < oppGoalsFan2 ? Math.round(-7 * derbyMult2) : 1;
-      save.fanSatisfaction = Math.max(0, Math.min(100, (save.fanSatisfaction ?? 50) + fanDelta2));
+      const tactical2 = save.tacticalSetup;
+      const isAttacking2 = tactical2.posture === 'attack';
+      const isDefensive2 = tactical2.posture === 'defensive';
+      const won2b = userGoalsFan2 > oppGoalsFan2;
+      const lost2b = userGoalsFan2 < oppGoalsFan2;
+      const fanBase2 = won2b ? 5 : lost2b ? -7 : 1;
+      const fanStyleBonus2 = isAttacking2 ? 2 : isDefensive2 ? -2 : 0;
+      const fanGoalBonus2 = Math.min(Math.max(userGoalsFan2 - 1, 0), 3);
+      const fanDelta2 = Math.round((fanBase2 + fanStyleBonus2 + fanGoalBonus2) * derbyMult2);
+      save.fanSatisfaction = clamp((save.fanSatisfaction ?? 50) + fanDelta2, 0, 100);
+      const boardDelta2 = Math.round((won2b ? 3 : lost2b ? -5 : -1) * derbyMult2);
+      save.boardConfidence = clamp((save.boardConfidence ?? 60) + boardDelta2, 0, 100);
     }
 
     resolveKnockoutsForSave(save);
@@ -1968,8 +2011,42 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!player || !targetTeam) return 'not_found';
 
     const userTeam = save.teams.find((t) => t.id === save.controlledTeamId)!;
+    // master_negotiator: 15% de desconto automático no valor necessário para aceitar
+    const negotiatorDiscount = (save.unlockedSkills ?? []).includes('master_negotiator') ? 0.85 : 1.0;
     if (userTeam.budget < amount) return 'no_budget';
     if (userTeam.squad.length >= 35) return 'squad_full';
+
+    // Release clause: se a oferta ≥ cláusula, transferência é automática
+    if (player.releaseClause && amount >= player.releaseClause) {
+      // Transferência pela cláusula
+      const listingRelease: import('@/types').TransferListing = {
+        id: nanoid(8),
+        playerId,
+        fromTeamId: targetTeamId,
+        askingPrice: player.releaseClause,
+        turn: save.currentTurn,
+        status: 'open',
+        bids: [],
+      };
+      const bidRelease: import('@/types').TransferBid = {
+        id: nanoid(8),
+        fromTeamId: save.controlledTeamId,
+        amount,
+        turn: save.currentTurn,
+        status: 'pending',
+      };
+      listingRelease.bids.push(bidRelease);
+      save.transferMarket.push(listingRelease);
+      executeTransfer(listingRelease, bidRelease, save);
+      recordTransfer(save, player.name, amount, true);
+      pushNews(save, {
+        type: 'transfer',
+        title: `Cláusula rescisória acionada: ${player.name}`,
+        body: `${player.name} foi contratado por R$ ${(amount / 1000).toFixed(1)}M pela cláusula rescisória.`,
+      });
+      set({ save });
+      return 'ok';
+    }
 
     // Reutiliza listing existente ou cria um novo para proposta direta
     let listing = save.transferMarket.find(
@@ -2001,15 +2078,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     };
     listing.bids.push(bid);
 
-    // IA processa imediatamente
-    const threshold = listing.askingPrice * 0.9;
+    // IA processa imediatamente (negociator tem threshold menor)
+    const threshold = listing.askingPrice * 0.9 * negotiatorDiscount;
     let result: 'ok' | 'countered' | 'rejected' = 'ok';
     if (amount >= threshold) {
       executeTransfer(listing, bid, save);
       recordTransfer(save, player.name, amount, true);
-    } else if (amount >= listing.askingPrice * 0.6) {
+    } else if (amount >= listing.askingPrice * 0.6 * negotiatorDiscount) {
       bid.status = 'countered';
-      bid.counterAmount = Math.round(listing.askingPrice * 0.92);
+      bid.counterAmount = Math.round(listing.askingPrice * 0.92 * negotiatorDiscount);
       result = 'countered';
     } else {
       bid.status = 'rejected';
@@ -2480,6 +2557,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       training: [500, 1500, 3000],
       medical:  [400, 1200, 2500],
       youth:    [600, 2000, 4000],
+      stadium:  [1000, 3000, 6000],
+    };
+    const NAMES: Record<keyof Infrastructure, string> = {
+      training: 'Centro de Treinamento',
+      medical:  'Departamento Médico',
+      youth:    'Academia de Base',
+      stadium:  'Estádio',
     };
     const currentLevel = save.infrastructure[type] as 0 | 1 | 2 | 3;
     if (currentLevel >= 3) return;
@@ -2487,10 +2571,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (userTeam.budget < cost) return;
     userTeam.budget -= cost;
     (save.infrastructure[type] as number)++;
+    // Para o estádio, atualizar a capacidade do time
+    if (type === 'stadium') {
+      const BONUS: Record<0|1|2|3, number> = { 0: 0, 1: 5000, 2: 12000, 3: 22000 };
+      const newLevel = save.infrastructure.stadium as 0 | 1 | 2 | 3;
+      const prevLevel = (newLevel - 1) as 0 | 1 | 2 | 3;
+      const bonus = BONUS[newLevel] - BONUS[prevLevel];
+      if (bonus > 0 && userTeam.stadiumCapacity) {
+        userTeam.stadiumCapacity += bonus;
+      }
+    }
     pushNews(save, {
       type: 'finance',
-      title: `Infraestrutura melhorada: ${type}`,
-      body: `Nível ${save.infrastructure[type]} atingido. Investimento: R$ ${(cost / 1000).toFixed(1)}M.`,
+      title: `${NAMES[type]} melhorado — Nível ${save.infrastructure[type]}`,
+      body: `Investimento: R$ ${(cost / 1000).toFixed(1)}M.${type === 'stadium' ? ` Capacidade do estádio ampliada!` : ''}`,
     });
     set({ save });
   },

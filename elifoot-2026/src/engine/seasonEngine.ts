@@ -5,10 +5,20 @@ import type {
   BoardObjective,
   ObjectiveType,
   SeasonAward,
+  Player,
 } from '@/types';
 import { sortStandings } from '@/competitions/brasileirao';
 import { autoPickStartingEleven, generatePlayer, generateYouthPlayer } from '@/engine/playerGenerator';
 import { clamp, createRng } from '@/utils/random';
+
+function recalcPlayerOverall(p: Player): number {
+  const w =
+    p.position === 'GK' ? { attack: 0.05, defense: 0.40, pace: 0.10, technique: 0.30, stamina: 0.15 }
+    : p.position === 'DF' ? { attack: 0.10, defense: 0.40, pace: 0.15, technique: 0.15, stamina: 0.20 }
+    : p.position === 'MF' ? { attack: 0.20, defense: 0.20, pace: 0.15, technique: 0.30, stamina: 0.15 }
+    : { attack: 0.40, defense: 0.10, pace: 0.20, technique: 0.20, stamina: 0.10 };
+  return clamp(Math.round(p.attack * w.attack + p.defense * w.defense + p.pace * w.pace + p.technique * w.technique + p.stamina * w.stamina), 1, 99);
+}
 
 // ============================================================
 // Detecta se a temporada encerrou
@@ -507,6 +517,16 @@ export function startNewSeason(save: SaveGame): void {
     save.boardConfidence = clamp((save.boardConfidence ?? 60) + 10, 0, 100);
   }
 
+  // defensive_specialist: +3 DEF para DFs e GKs do elenco
+  if (skills.includes('defensive_specialist') && userTeam) {
+    userTeam.squad.forEach((p) => {
+      if (p.position === 'DF' || p.position === 'GK') {
+        p.defense = clamp(p.defense + 3, 1, 99);
+        p.overall = recalcPlayerOverall(p);
+      }
+    });
+  }
+
   // ── Limpar mercado e histórico financeiro ─────────────────
   save.transferMarket = save.transferMarket.filter((l) => l.status !== 'open');
   const keepFrom = Math.max(0, save.currentTurn - 30);
@@ -524,9 +544,12 @@ export function startNewSeason(save: SaveGame): void {
   }
 
   // ── Nova safra da base ────────────────────────────────────
-  save.youthPlayers = [
-    generateYouthPlayer(save.season * 300 + 1, save.season),
-    generateYouthPlayer(save.season * 300 + 2, save.season),
-    generateYouthPlayer(save.season * 300 + 3, save.season),
-  ];
+  // Quantidade de jovens depende do nível da Academia (youth infra): 0→3, 1→4, 2→5, 3→6
+  const youthLevel = (save.infrastructure?.youth ?? 0) as 0 | 1 | 2 | 3;
+  const youthCount = 3 + youthLevel;
+  // Bônus de potencial por nível de academia: 0→0, 1→3, 2→6, 3→10
+  const potentialBonus = [0, 3, 6, 10][youthLevel] ?? 0;
+  save.youthPlayers = Array.from({ length: youthCount }, (_, i) =>
+    generateYouthPlayer(save.season * 300 + i + 1, save.season, potentialBonus),
+  );
 }

@@ -57,6 +57,28 @@ export const MANAGER_SKILLS: ManagerSkillDef[] = [
     category: 'finance',
     cost: 600,
   },
+  // ── Especializações avançadas ────────────────────────────────
+  {
+    id: 'defensive_specialist',
+    name: 'Especialista Defensivo',
+    description: 'Toda a defesa e meio do elenco recebe +3 DEF permanente ao iniciar cada temporada. Sacrifica levemente a satisfação da torcida por jogar mais fechado.',
+    category: 'tactics',
+    cost: 900,
+  },
+  {
+    id: 'talent_coach',
+    name: 'Coach de Jovens Talentos',
+    description: 'Jogadores com 23 anos ou menos progridem 40% mais rápido nos treinos. Ideal para clubes formadores.',
+    category: 'youth',
+    cost: 750,
+  },
+  {
+    id: 'master_negotiator',
+    name: 'Negociador Mestre',
+    description: 'Preços de compra em transferências diretas são automaticamente 15% menores. O mercado aceita suas propostas com mais facilidade.',
+    category: 'finance',
+    cost: 850,
+  },
 ];
 
 export function getSkill(id: string): ManagerSkillDef | undefined {

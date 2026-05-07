@@ -147,6 +147,8 @@ export default function SquadPage() {
               const contractExpiring = !contractExpired && p.contractUntil <= save.season + 1;
               const contractColor = contractExpired ? 'text-red-400' : contractExpiring ? 'text-yellow-400' : 'text-white/40';
               const leavingFree = p.leavingFree === true;
+              const hasProneness = (p.injuryProneness ?? 0) >= 30;
+              const proneLevel = (p.injuryProneness ?? 0) >= 60 ? 'alto' : 'médio';
               return (
                 <li
                   key={p.id}
@@ -164,10 +166,12 @@ export default function SquadPage() {
                       {p.id === captainId && <Crown className="w-3 h-3 text-yellow-400" aria-label="Capitão" />}
                       {(contractExpired || contractExpiring) && !leavingFree && <AlertTriangle className={`w-3 h-3 ${contractExpired ? 'text-red-400' : 'text-yellow-400'}`} />}
                       {leavingFree && <span className="text-[9px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-medium leading-none">Sai livre</span>}
+                      {hasProneness && <span className={`text-[9px] px-1 py-0.5 rounded font-medium leading-none ${proneLevel === 'alto' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`} title={`Histórico de lesões — risco ${proneLevel}`}>🩹 {proneLevel === 'alto' ? 'Alto risco' : 'Risco'}</span>}
                       {p.name}
                     </div>
                     <div className="text-xs text-white/50">
                       {p.age} anos · Contrato: <span className={contractColor}>{p.contractUntil}</span>
+                      {p.releaseClause && <span className="ml-2 text-blue-400" title={`Cláusula rescisória: R$ ${(p.releaseClause / 1000).toFixed(1)}M`}>🔒 R$ {(p.releaseClause / 1000).toFixed(1)}M</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-white/60">

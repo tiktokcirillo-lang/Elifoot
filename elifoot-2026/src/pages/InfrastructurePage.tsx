@@ -1,6 +1,7 @@
 import { useGameStore } from '@/store/gameStore';
 import type { Infrastructure } from '@/types';
-import { Building2, Heart, TrendingUp, Lock, CheckCircle } from 'lucide-react';
+import { Building2, Heart, TrendingUp, Lock, CheckCircle, Landmark } from 'lucide-react';
+import { STADIUM_EXPANSION_BONUS } from '@/data/stadiumData';
 
 interface FacilityDef {
   key: keyof Infrastructure;
@@ -44,12 +45,25 @@ const FACILITIES: FacilityDef[] = [
     icon: <TrendingUp className="w-5 h-5 text-yellow-400" />,
     description: 'Melhora o potencial dos jovens revelados pela base do clube.',
     levelDescriptions: [
-      'Escolinha básica. Jovens com potencial padrão (55–70 OVR).',
-      'Academia estruturada. Jovens com potencial melhorado (60–75 OVR).',
-      'Centro de excelência. Jovens de alta qualidade (65–80 OVR).',
-      'Academia de elite. Revelações excepcionais (70–85 OVR).',
+      'Escolinha básica. 3 jovens/temporada, potencial padrão (55–70 OVR).',
+      'Academia estruturada. 4 jovens/temporada, potencial melhorado (60–75 OVR).',
+      'Centro de excelência. 5 jovens/temporada, alta qualidade (65–80 OVR).',
+      'Academia de elite. 6 jovens/temporada, revelações excepcionais (70–85 OVR).',
     ],
     costs: [600, 2000, 4000],
+  },
+  {
+    key: 'stadium',
+    name: 'Expansão do Estádio',
+    icon: <Landmark className="w-5 h-5 text-gold-400" />,
+    description: 'Amplia a capacidade do estádio, aumentando a receita de bilheteria em jogos em casa.',
+    levelDescriptions: [
+      'Capacidade original. Receita de bilheteria com a lotação base do estádio.',
+      '+5.000 lugares. Bilheteria ~8-10% maior por jogo em casa.',
+      '+12.000 lugares acumulados. Bilheteria ~20% maior por jogo em casa.',
+      '+22.000 lugares acumulados. Bilheteria ~35% maior por jogo em casa.',
+    ],
+    costs: [1000, 3000, 6000],
   },
 ];
 
@@ -60,7 +74,7 @@ export default function InfrastructurePage() {
 
   if (!save || !userTeam) return null;
 
-  const infra = save.infrastructure ?? { training: 0, medical: 0, youth: 0 };
+  const infra = save.infrastructure ?? { training: 0, medical: 0, youth: 0, stadium: 0 };
 
   return (
     <div className="space-y-4">
@@ -75,6 +89,13 @@ export default function InfrastructurePage() {
         const isMax = level >= 3;
         const nextCost: number | null = isMax || level >= fac.costs.length ? null : (fac.costs[level as 0 | 1 | 2] ?? null);
         const canAfford = nextCost !== null && userTeam.budget >= nextCost;
+
+        const stadiumExtra = fac.key === 'stadium' && userTeam.stadiumName ? (
+          <div className="mb-3 bg-white/5 rounded-lg px-3 py-2 text-xs text-white/60 flex justify-between">
+            <span>{userTeam.stadiumName}</span>
+            <span className="font-semibold text-white/80">{((userTeam.stadiumCapacity ?? 0) + STADIUM_EXPANSION_BONUS[level as 0|1|2|3]).toLocaleString('pt-BR')} lugares</span>
+          </div>
+        ) : null;
 
         return (
           <div key={fac.key} className="panel p-5">
@@ -103,6 +124,7 @@ export default function InfrastructurePage() {
               </div>
             </div>
 
+            {stadiumExtra}
             {/* Descrições por nível */}
             <div className="space-y-1.5 mb-4">
               {fac.levelDescriptions.map((desc, i) => (

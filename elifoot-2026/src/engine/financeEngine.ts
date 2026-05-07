@@ -1,16 +1,19 @@
 import { nanoid } from 'nanoid';
 import type { SaveGame, Team, FinanceRecord, TeamTier } from '@/types';
+import { TIER_BASE_CAPACITY, effectiveCapacity } from '@/data/stadiumData';
+import { isDerby } from '@/data/rivalries';
 
-// ============================================================
-// Constantes financeiras por tier
-// ============================================================
+// Legacy alias so callers that still reference STADIUM_CAPACITY keep working
+const STADIUM_CAPACITY: Record<TeamTier, number> = TIER_BASE_CAPACITY;
 
-const STADIUM_CAPACITY: Record<TeamTier, number> = {
-  elite: 70000,
-  top:   50000,
-  mid:   35000,
-  low:   20000,
-};
+/** Retorna a capacidade efetiva do time, considerando expansão de estádio */
+function getCapacity(team: Team, save: SaveGame): number {
+  const base = team.stadiumCapacity ?? STADIUM_CAPACITY[team.tier];
+  const stadiumLevel = (save.infrastructure?.stadium ?? 0) as 0 | 1 | 2 | 3;
+  // Expansão só se aplica ao time controlado pelo usuário
+  if (!team.isUserControlled) return base;
+  return effectiveCapacity(base, stadiumLevel);
+}
 
 const TICKET_PRICE: Record<TeamTier, number> = {
   elite: 90,   // R$ por ingresso
@@ -61,18 +64,21 @@ export function processTicketRevenue(
   const comp = save.competitions.find((c) => c.fixtures.some((f) => f.id === fixtureId));
   const isKnockout = comp?.format !== 'round_robin';
 
-  const capacity = STADIUM_CAPACITY[userTeam.tier];
+  const capacity = getCapacity(userTeam, save);
   const rate = attendanceRate(userTeam, awayTeam, isKnockout);
   const price = TICKET_PRICE[userTeam.tier];
   // Fan satisfaction afeta bilheteria: 0→80%, 50→100%, 100→120%
   const fanMult = 0.8 + ((save.fanSatisfaction ?? 50) / 100) * 0.4;
-  const revenue = Math.round((capacity * rate * price * fanMult) / 1000); // em milhares
+  // Derby/clássico enche mais o estádio (+15% de lotação e receita)
+  const derbyBonus = isDerby(userTeam.id, awayTeam.id) ? 1.15 : 1.0;
+  const revenue = Math.round((capacity * rate * price * fanMult * derbyBonus) / 1000); // em milhares
+  const isDerbyMatch = derbyBonus > 1.0;
 
   userTeam.budget += revenue;
   addRecord(save, {
     type: 'ticket',
     amount: revenue,
-    description: `Bilheteria: ${userTeam.shortName} vs ${awayTeam.shortName} (${Math.round(rate * 100)}% lotação) — ${comp?.shortName ?? ''}`,
+    description: `Bilheteria: ${userTeam.shortName} vs ${awayTeam.shortName} (${Math.round(rate * 100)}% lotação)${isDerbyMatch ? ' — Clássico!' : ''} — ${comp?.shortName ?? ''}`,
   });
 }
 
@@ -190,7 +196,7 @@ export function calcWeeklyCashflow(save: SaveGame): WeeklyCashflow {
   );
   const avgAttendance = 0.65 + (userTeam.reputation / 100) * 0.25;
   const projectedTickets = Math.round(
-    (STADIUM_CAPACITY[userTeam.tier] * avgAttendance * TICKET_PRICE[userTeam.tier]) / 1000,
+    (getCapacity(userTeam, save) * avgAttendance * TICKET_PRICE[userTeam.tier]) / 1000,
   );
 
   return {
