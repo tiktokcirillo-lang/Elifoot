@@ -3,6 +3,14 @@ import { useGameStore } from '@/store/gameStore';
 import type { Player, Position } from '@/types';
 import { Star, Heart, Activity, TrendingUp, ArrowUpCircle, RefreshCw, AlertTriangle, Crown } from 'lucide-react';
 
+const POS_OPTIONS: Position[] = ['GK', 'DF', 'MF', 'FW'];
+const POS_COLOR: Record<Position, string> = {
+  GK: 'bg-yellow-600/30 text-yellow-300 border-yellow-600/40',
+  DF: 'bg-blue-600/30 text-blue-300 border-blue-600/40',
+  MF: 'bg-green-600/30 text-green-300 border-green-600/40',
+  FW: 'bg-red-600/30 text-red-300 border-red-600/40',
+};
+
 const POSITION_ORDER: Position[] = ['GK', 'DF', 'MF', 'FW'];
 const POSITION_LABEL: Record<Position, string> = {
   GK: 'Goleiros',
@@ -17,7 +25,9 @@ export default function SquadPage() {
   const setUserStarting11 = useGameStore((s) => s.setUserStarting11);
   const promoteYouthPlayer = useGameStore((s) => s.promoteYouthPlayer);
   const renewContract = useGameStore((s) => s.renewContract);
+  const changePlayerPosition = useGameStore((s) => s.changePlayerPosition);
   const [selected, setSelected] = useState<string[]>(() => userTeam?.starting11 ?? []);
+  const [posPickerId, setPosPickerId] = useState<string | null>(null);
 
   const captainId = save?.tacticalSetup?.captainId ?? null;
 
@@ -66,8 +76,8 @@ export default function SquadPage() {
             Formação atual: <span className="text-white">{userTeam.formation}</span> ·
             Selecionados: <span className="text-white">{selected.length}/11</span> ·
             Elenco:{' '}
-            <span className={userTeam.squad.length >= 30 ? 'text-red-400 font-bold' : userTeam.squad.length >= 28 ? 'text-yellow-400' : 'text-white'}>
-              {userTeam.squad.length}/30
+            <span className={userTeam.squad.length >= 35 ? 'text-red-400 font-bold' : userTeam.squad.length >= 32 ? 'text-yellow-400' : 'text-white'}>
+              {userTeam.squad.length}/35
             </span>
           </div>
         </div>
@@ -123,6 +133,36 @@ export default function SquadPage() {
                     <span title="Físico" className="flex items-center gap-1">
                       <Activity className="w-3 h-3" /> {p.fitness}
                     </span>
+
+                    {/* Seletor de posição */}
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        title="Alterar posição"
+                        className={`px-2 py-0.5 rounded border text-[10px] font-bold ${POS_COLOR[p.position]}`}
+                        onClick={() => setPosPickerId(posPickerId === p.id ? null : p.id)}
+                      >
+                        {p.position}
+                      </button>
+                      {posPickerId === p.id && (
+                        <div className="absolute right-0 top-6 z-20 flex gap-1 bg-midnight-800 border border-white/10 rounded-lg p-1 shadow-xl">
+                          {POS_OPTIONS.map((pos) => (
+                            <button
+                              key={pos}
+                              className={`px-2 py-1 rounded text-[10px] font-bold border ${
+                                pos === p.position ? POS_COLOR[pos] : 'border-white/10 text-white/50 hover:bg-white/10'
+                              }`}
+                              onClick={() => {
+                                changePlayerPosition(p.id, pos);
+                                setPosPickerId(null);
+                              }}
+                            >
+                              {pos}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     {(contractExpired || contractExpiring) && (
                       <button
                         title={`Renovar contrato (bônus: R$ ${p.wageMonthly}k)`}

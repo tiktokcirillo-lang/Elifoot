@@ -101,6 +101,7 @@ interface GameState {
   simulateSecondHalf: (fixtureId: string, firstHalfResult: MatchResult, subs: { outId: string; inId: string }[]) => Promise<MatchResult | null>;
   setUserStarting11: (ids: string[]) => void;
   renewContract: (playerId: string) => void;
+  changePlayerPosition: (playerId: string, newPosition: import('@/types').Position) => void;
 
   // Transferências
   listPlayerForSale: (playerId: string, askingPrice: number) => void;
@@ -1700,6 +1701,20 @@ export const useGameStore = create<GameState>((set, get) => ({
       body: `Novo vínculo até ${player.contractUntil}. Salário: R$ ${player.wageMonthly}k/mês.`,
     });
 
+    set({ save });
+  },
+
+  changePlayerPosition(playerId, newPosition) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam) return;
+    const player = userTeam.squad.find((p) => p.id === playerId);
+    if (!player) return;
+    player.position = newPosition;
+    // Se estava na escalação e a nova posição muda o perfil, remove para forçar reagendamento
+    userTeam.starting11 = userTeam.starting11.filter((id) => id !== playerId);
     set({ save });
   },
 
