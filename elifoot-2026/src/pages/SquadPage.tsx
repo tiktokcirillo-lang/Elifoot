@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import type { Player, Position } from '@/types';
-import { Star, Heart, Activity, TrendingUp, ArrowUpCircle, RefreshCw, AlertTriangle, Crown, DollarSign, ArrowLeftRight, X } from 'lucide-react';
+import { Star, Heart, Activity, TrendingUp, ArrowUpCircle, AlertTriangle, Crown, DollarSign, ArrowLeftRight, X, FileText } from 'lucide-react';
 
 const POS_OPTIONS: Position[] = ['GK', 'DF', 'MF', 'FW'];
 const POS_COLOR: Record<Position, string> = {
@@ -24,7 +24,7 @@ export default function SquadPage() {
   const save = useGameStore((s) => s.save);
   const setUserStarting11 = useGameStore((s) => s.setUserStarting11);
   const promoteYouthPlayer = useGameStore((s) => s.promoteYouthPlayer);
-  const renewContract = useGameStore((s) => s.renewContract);
+  const negotiateContract = useGameStore((s) => s.negotiateContract);
   const changePlayerPosition = useGameStore((s) => s.changePlayerPosition);
   const sellPlayerDirectly = useGameStore((s) => s.sellPlayerDirectly);
   const loanPlayerOut = useGameStore((s) => s.loanPlayerOut);
@@ -35,6 +35,8 @@ export default function SquadPage() {
   const [dealAmount, setDealAmount] = useState('');
   const [dealSeasons, setDealSeasons] = useState('1');
   const [dealFeedback, setDealFeedback] = useState<string | null>(null);
+  const [negotiatePlayer, setNegotiatePlayer] = useState<Player | null>(null);
+  const [negotiateFeedback, setNegotiateFeedback] = useState<string | null>(null);
 
   function openDeal(p: Player, mode: 'sell' | 'loan', e: React.MouseEvent) {
     e.stopPropagation();
@@ -236,13 +238,13 @@ export default function SquadPage() {
                       )}
                     </div>
 
-                    {(contractExpired || contractExpiring) && (
+                    {(contractExpired || contractExpiring) && !leavingFree && (
                       <button
-                        title={`Renovar contrato (bônus: R$ ${p.wageMonthly}k)`}
+                        title="Negociar renovação de contrato"
                         className="flex items-center gap-1 px-2 py-0.5 bg-pitch-500/20 border border-pitch-500/40 rounded hover:bg-pitch-500/30 text-pitch-300"
-                        onClick={(e) => { e.stopPropagation(); renewContract(p.id); }}
+                        onClick={(e) => { e.stopPropagation(); setNegotiatePlayer(p); setNegotiateFeedback(null); }}
                       >
-                        <RefreshCw className="w-3 h-3" /> Renovar
+                        <FileText className="w-3 h-3" /> Negociar
                       </button>
                     )}
                   </div>
@@ -286,6 +288,103 @@ export default function SquadPage() {
           </ul>
         </div>
       )}
+      {/* Modal negociar contrato */}
+      {negotiatePlayer && (() => {
+        const p = negotiatePlayer;
+        const demandPct = p.overall >= 86 ? 0.50 : p.overall >= 81 ? 0.30 : p.overall >= 71 ? 0.20 : 0.12;
+        const wageFullDemand = Math.round(p.wageMonthly * (1 + demandPct));
+        const wageCounter   = Math.round(p.wageMonthly * (1 + demandPct * 0.55));
+        const wageMinimal   = Math.round(p.wageMonthly * 1.06);
+
+        function handleChoice(choice: 'full' | 'counter' | 'minimal' | 'refuse') {
+          const result = negotiateContract(p.id, choice);
+          if (result === 'ok') {
+            setNegotiatePlayer(null);
+            const labels: Record<string, string> = {
+              full:    `✓ Contrato renovado — ${p.name} aceitou a proposta completa.`,
+              counter: `✓ Contrato renovado com contraproposta — ${p.name} aceitou.`,
+              minimal: `✓ Contrato renovado com reajuste mínimo.`,
+              refuse:  `${p.name} marcado para sair no final do contrato.`,
+            };
+            setDealFeedback(labels[choice] ?? '✓ Ok');
+          } else if (result === 'refused') {
+            setNegotiateFeedback(`${p.name} rejeitou a proposta — vai sair ao final do contrato.`);
+          } else if (result === 'no_budget') {
+            setNegotiateFeedback('Saldo insuficiente para pagar o bônus de assinatura.');
+          } else {
+            setNegotiatePlayer(null);
+          }
+        }
+
+        return (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="panel p-6 w-full max-w-sm space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-bold text-lg">{p.name}</div>
+                  <div className="text-xs text-white/50">
+                    {p.position} · {p.age} anos · OVR {p.overall} · Atual: R$ {p.wageMonthly}k/mês
+                  </div>
+                </div>
+                <button onClick={() => setNegotiatePlayer(null)}><X className="w-5 h-5 text-white/50" /></button>
+              </div>
+
+              <div className="text-xs text-white/50 border-b border-white/10 pb-2">
+                Contrato expira em <span className="text-yellow-400 font-semibold">{p.contractUntil}</span> · Temporada atual: {save.season}
+              </div>
+
+              {negotiateFeedback && (
+                <div className="text-xs bg-red-500/10 border border-red-500/30 text-red-300 rounded px-3 py-2">
+                  {negotiateFeedback}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <button
+                  className="w-full text-left px-4 py-3 rounded-lg border border-pitch-500/40 bg-pitch-500/10 hover:bg-pitch-500/20 transition-colors"
+                  onClick={() => handleChoice('full')}
+                >
+                  <div className="text-sm font-semibold text-pitch-300">Aceitar exigência</div>
+                  <div className="text-xs text-white/50 mt-0.5">
+                    R$ {wageFullDemand}k/mês · 3 anos · Bônus: R$ {p.wageMonthly}k
+                  </div>
+                </button>
+
+                <button
+                  className="w-full text-left px-4 py-3 rounded-lg border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
+                  onClick={() => handleChoice('counter')}
+                >
+                  <div className="text-sm font-semibold text-blue-300">Contraproposta</div>
+                  <div className="text-xs text-white/50 mt-0.5">
+                    R$ {wageCounter}k/mês · 2 anos · Jogador pode recusar
+                  </div>
+                </button>
+
+                <button
+                  className="w-full text-left px-4 py-3 rounded-lg border border-yellow-600/40 bg-yellow-600/10 hover:bg-yellow-600/20 transition-colors"
+                  onClick={() => handleChoice('minimal')}
+                >
+                  <div className="text-sm font-semibold text-yellow-300">Reajuste mínimo (+6%)</div>
+                  <div className="text-xs text-white/50 mt-0.5">
+                    R$ {wageMinimal}k/mês · 1 ano · Jogador pode recusar
+                  </div>
+                </button>
+
+                <button
+                  className="w-full text-left px-4 py-3 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+                  onClick={() => handleChoice('refuse')}
+                >
+                  <div className="text-sm font-semibold text-red-400">Recusar negociação</div>
+                  <div className="text-xs text-white/50 mt-0.5">
+                    Jogador marcado para sair livre no fim do contrato
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal vender / emprestar */}
       {dealPlayer && dealMode && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
