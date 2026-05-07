@@ -286,6 +286,7 @@ function generateInitialCompetitions(
   userTeamId: string,
   season: number,
   previousBrasileiraoStandings?: CompetitionStanding[],
+  previousLibertadoresFinalists?: { champion?: string; runnerUp?: string },
 ): Competition[] {
   const brTeamIds = teams.map((t) => t.id);
   // Série B and C teams in allTeams
@@ -395,9 +396,14 @@ function generateInitialCompetitions(
     seed: season * 1000 + 4,
   });
 
-  // ── Mundial de Clubes (8 times — 2 CONMEBOL BR, 1 CONMEBOL SA, 1 UEFA, 4 outras confederações)
-  // Rotaciona times de AFC/CAF/CONCACAF por temporada para variedade
-  const top2BrMundial = sortedByRep.slice(0, 2).map((t) => t.id);
+  // ── Mundial de Clubes (8 times — 2 CONMEBOL, 1 UEFA, 4 outras confederações)
+  // Vagas CONMEBOL: campeão e vice da Libertadores anterior; sem resultado anterior usa top 2 por reputação
+  const top2BrMundial = (() => {
+    const { champion, runnerUp } = previousLibertadoresFinalists ?? {};
+    if (champion && runnerUp) return [champion, runnerUp];
+    if (champion) return [champion, ...sortedByRep.filter((t) => t.id !== champion).slice(0, 1).map((t) => t.id)];
+    return sortedByRep.slice(0, 2).map((t) => t.id);
+  })();
   const top1SaMundial = allTeams
     .filter((t) => LIBERTADORES_EXTRA_SEEDS.some((s) => s.id === t.id))
     .sort((a, b) => b.reputation - a.reputation)
@@ -1858,6 +1864,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       ? sortStandings(prevBrasileirao.standings, save.teams)
       : undefined;
 
+    // Captura campeão e vice da Libertadores antes de reiniciar
+    const prevLibertadores = save.competitions.find((c) => c.shortName === 'Libertadores');
+    const prevLibertadoresFinalists = (() => {
+      if (!prevLibertadores?.championId) return undefined;
+      const finalMatch = prevLibertadores.knockoutBracket?.find((p) => p.stage === 'final');
+      const runnerUp = finalMatch
+        ? (finalMatch.team1Id === prevLibertadores.championId ? finalMatch.team2Id : finalMatch.team1Id)
+        : undefined;
+      return { champion: prevLibertadores.championId, runnerUp };
+    })();
+
     startNewSeason(save);
 
     // Garante que os times extras (SA, EU, paulistas) estejam em save.teams
@@ -1889,6 +1906,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       save.controlledTeamId,
       save.season,
       prevBrasileiraoStandings,
+      prevLibertadoresFinalists,
     );
     save.competitions = comps;
 
