@@ -1,5 +1,42 @@
-import type { Team, TeamTier } from '@/types';
+import type { Team, TeamTier, Player } from '@/types';
 import { generateSquad, autoPickStartingEleven } from '@/engine/playerGenerator';
+import {
+  buildRealMadridSquad,
+  buildBarcelonaSquad,
+  buildManCitySquad,
+  buildLiverpoolSquad,
+  buildManUnitedSquad,
+  buildArsenalSquad,
+  buildChelseaSquad,
+  buildPSGSquad,
+  buildBayernSquad,
+  buildDortmundSquad,
+  buildJuventusSquad,
+  buildInterSquad,
+  buildMilanSquad,
+  buildAtleticoMadridSquad,
+  buildPortoSquad,
+  buildBenficaSquad,
+} from '@/data/realSquads';
+
+const REAL_SQUAD_BUILDERS: Record<string, () => Player[]> = {
+  rmd:    buildRealMadridSquad,
+  bcn:    buildBarcelonaSquad,
+  mci:    buildManCitySquad,
+  liv:    buildLiverpoolSquad,
+  mun:    buildManUnitedSquad,
+  ars:    buildArsenalSquad,
+  che:    buildChelseaSquad,
+  psg:    buildPSGSquad,
+  bay:    buildBayernSquad,
+  bvb:    buildDortmundSquad,
+  jve:    buildJuventusSquad,
+  inm:    buildInterSquad,
+  mil:    buildMilanSquad,
+  atm_es: buildAtleticoMadridSquad,
+  por:    buildPortoSquad,
+  ben:    buildBenficaSquad,
+};
 
 interface ExtraSeed {
   id: string;
@@ -124,7 +161,9 @@ export const COPA_MUNDO_SEEDS: ExtraSeed[] = [
 
 export function buildExtraTeams(seeds: ExtraSeed[]): Team[] {
   return seeds.map((seed) => {
-    const squad = generateSquad(seed.tier, seed.squadSeed);
+    const squad = REAL_SQUAD_BUILDERS[seed.id]
+      ? REAL_SQUAD_BUILDERS[seed.id]()
+      : generateSquad(seed.tier, seed.squadSeed);
     const { starting, bench } = autoPickStartingEleven(squad, '4-3-3');
     return {
       id: seed.id,
