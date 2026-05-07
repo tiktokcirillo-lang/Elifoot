@@ -287,6 +287,7 @@ function generateInitialCompetitions(
   season: number,
   previousBrasileiraoStandings?: CompetitionStanding[],
   previousLibertadoresFinalists?: { champion?: string; runnerUp?: string },
+  previousChampionsChampion?: string,
 ): Competition[] {
   const brTeamIds = teams.map((t) => t.id);
   // Série B and C teams in allTeams
@@ -409,11 +410,14 @@ function generateInitialCompetitions(
     .sort((a, b) => b.reputation - a.reputation)
     .slice(0, 1)
     .map((t) => t.id);
-  const top1EuMundial = allTeams
-    .filter((t) => CHAMPIONS_EXTRA_SEEDS.some((s) => s.id === t.id))
-    .sort((a, b) => b.reputation - a.reputation)
-    .slice(0, 1)
-    .map((t) => t.id);
+  // Vaga UEFA: campeão da Champions anterior; sem resultado usa o de maior reputação
+  const top1EuMundial = previousChampionsChampion
+    ? [previousChampionsChampion]
+    : allTeams
+        .filter((t) => CHAMPIONS_EXTRA_SEEDS.some((s) => s.id === t.id))
+        .sort((a, b) => b.reputation - a.reputation)
+        .slice(0, 1)
+        .map((t) => t.id);
   // Rotaciona times extras (AFC/CAF/CONCACAF/OFC) por temporada — simulando classificação dinâmica
   const mundialExtrasPool = allTeams
     .filter((t) => MUNDIAL_EXTRA_SEEDS.some((s) => s.id === t.id));
@@ -1875,6 +1879,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       return { champion: prevLibertadores.championId, runnerUp };
     })();
 
+    // Captura campeão da Champions League antes de reiniciar
+    const prevChampionsChampion = save.competitions.find((c) => c.shortName === 'Champions')?.championId;
+
     startNewSeason(save);
 
     // Garante que os times extras (SA, EU, paulistas) estejam em save.teams
@@ -1907,6 +1914,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       save.season,
       prevBrasileiraoStandings,
       prevLibertadoresFinalists,
+      prevChampionsChampion,
     );
     save.competitions = comps;
 
