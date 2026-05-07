@@ -5,6 +5,7 @@ import type { MatchEvent, MatchResult, TacticalPosture, PressingLevel } from '@/
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ArrowRightLeft, Mic, MicOff, Volume2, VolumeX, Star, Flame } from 'lucide-react';
 import MatchField from '@/components/MatchField';
+import SharedTeamBadge from '@/components/TeamBadge';
 import { soundEngine } from '@/engine/soundEngine';
 import { narratorEngine } from '@/engine/narratorEngine';
 import { getRivalry } from '@/data/rivalries';
@@ -192,9 +193,9 @@ export default function MatchPage() {
             {comp?.shortName} · Rodada {fixture.round}
           </div>
           <div className="flex items-center justify-around mb-4">
-            <TeamBadge name={home.name} shortName={home.shortName} bg={home.primaryColor} fg={home.secondaryColor} />
+            <TeamBadge id={home.id} name={home.name} shortName={home.shortName} bg={home.primaryColor} fg={home.secondaryColor} />
             <div className="display-font text-4xl text-white/30">VS</div>
-            <TeamBadge name={away.name} shortName={away.shortName} bg={away.primaryColor} fg={away.secondaryColor} />
+            <TeamBadge id={away.id} name={away.name} shortName={away.shortName} bg={away.primaryColor} fg={away.secondaryColor} />
           </div>
 
           {/* Banner de clássico */}
@@ -452,14 +453,14 @@ export default function MatchPage() {
           </div>
         </div>
         <div className="flex items-center justify-around mb-4">
-          <TeamBadge name={home.name} shortName={home.shortName} bg={home.primaryColor} fg={home.secondaryColor} />
+          <TeamBadge id={home.id} name={home.name} shortName={home.shortName} bg={home.primaryColor} fg={home.secondaryColor} />
           <div className="text-center">
             <div className="display-font text-6xl tracking-tight">
               {homeScoreNow} <span className="text-white/30">x</span> {awayScoreNow}
             </div>
             <div className="text-xs text-white/50 mt-1">{currentMinute}'</div>
           </div>
-          <TeamBadge name={away.name} shortName={away.shortName} bg={away.primaryColor} fg={away.secondaryColor} />
+          <TeamBadge id={away.id} name={away.name} shortName={away.shortName} bg={away.primaryColor} fg={away.secondaryColor} />
         </div>
 
         <div className="w-full h-1 bg-white/10 rounded overflow-hidden mb-4">
@@ -690,15 +691,10 @@ function getPressQuestions(won: boolean, drew: boolean) {
   }
 }
 
-function TeamBadge({ name, shortName, bg, fg }: { name: string; shortName: string; bg: string; fg: string }) {
+function TeamBadge({ name, shortName, bg, fg, id }: { id: string; name: string; shortName: string; bg: string; fg: string }) {
   return (
     <div className="text-center">
-      <div
-        className="w-20 h-20 rounded-xl flex items-center justify-center font-bold text-lg mx-auto"
-        style={{ backgroundColor: bg, color: fg }}
-      >
-        {shortName}
-      </div>
+      <SharedTeamBadge team={{ id, shortName, primaryColor: bg, secondaryColor: fg }} size={80} className="mx-auto" />
       <div className="text-xs text-white/70 mt-2 max-w-[100px] truncate">{name}</div>
     </div>
   );

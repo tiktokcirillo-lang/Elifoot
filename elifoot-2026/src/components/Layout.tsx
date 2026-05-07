@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import TeamBadge from '@/components/TeamBadge';
 import { useEffect, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import {
@@ -37,11 +38,8 @@ export default function Layout() {
       <header className="bg-midnight-900/80 backdrop-blur border-b border-white/5">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm relative"
-              style={{ backgroundColor: userTeam?.primaryColor, color: userTeam?.secondaryColor }}
-            >
-              {userTeam?.shortName}
+            <div className="relative">
+              {userTeam && <TeamBadge team={userTeam} size={38} />}
               {dismissed && (
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-midnight-900" />
               )}

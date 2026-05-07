@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
+import TeamBadge from '@/components/TeamBadge';
 import { useGameStore } from '@/store/gameStore';
 import { ChevronRight, FastForward, Target, DollarSign, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, Star, Briefcase, MessageSquare, Globe } from 'lucide-react';
 import { calcWeeklyCashflow } from '@/engine/financeEngine';
@@ -401,17 +402,14 @@ export default function DashboardPage() {
 function TeamCard({
   team, highlight, reverse,
 }: {
-  team: { name: string; shortName: string; primaryColor: string; secondaryColor: string };
+  team: { id: string; name: string; shortName: string; primaryColor: string; secondaryColor: string };
   highlight?: boolean;
   reverse?: boolean;
 }) {
   return (
     <div className={`flex items-center gap-3 ${reverse ? 'flex-row-reverse' : ''}`}>
-      <div
-        className={`w-14 h-14 rounded-lg flex items-center justify-center font-bold ${highlight ? 'ring-2 ring-pitch-500' : ''}`}
-        style={{ backgroundColor: team.primaryColor, color: team.secondaryColor }}
-      >
-        {team.shortName}
+      <div className={highlight ? 'ring-2 ring-pitch-500 rounded' : ''}>
+        <TeamBadge team={team} size={52} />
       </div>
       <div className={reverse ? 'text-right' : ''}>
         <div className="font-semibold leading-tight">{team.name}</div>

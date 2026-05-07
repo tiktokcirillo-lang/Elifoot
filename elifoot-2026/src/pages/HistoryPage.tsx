@@ -1,6 +1,7 @@
 import { useGameStore } from '@/store/gameStore';
 import { Trophy, TrendingUp, TrendingDown, AlertTriangle, LogOut } from 'lucide-react';
 import type { Team } from '@/types';
+import TeamBadge from '@/components/TeamBadge';
 
 export default function HistoryPage() {
   const save = useGameStore((s) => s.save);
@@ -156,12 +157,7 @@ function TeamPicker({ teams, onPick }: { teams: Team[]; onPick: (id: string) => 
           className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-left"
           onClick={() => onPick(team.id)}
         >
-          <div
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
-            style={{ backgroundColor: team.primaryColor, color: team.secondaryColor }}
-          >
-            {team.shortName}
-          </div>
+          <TeamBadge team={team} size={36} className="flex-shrink-0" />
           <div className="min-w-0">
             <div className="font-semibold text-sm truncate">{team.name}</div>
             <div className="text-xs text-white/40">

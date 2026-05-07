@@ -3,6 +3,7 @@ import { useGameStore } from '@/store/gameStore';
 import { sortStandings } from '@/competitions/brasileirao';
 import type { KnockoutPair, Competition } from '@/types';
 import { Trophy } from 'lucide-react';
+import TeamBadge from '@/components/TeamBadge';
 
 export default function TablePage() {
   const { competitionId } = useParams<{ competitionId: string }>();
@@ -103,12 +104,7 @@ function StandingsTable({ comp }: { comp: Competition }) {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <span
-                        className="w-6 h-6 rounded text-[10px] flex items-center justify-center font-bold"
-                        style={{ backgroundColor: team.primaryColor, color: team.secondaryColor }}
-                      >
-                        {team.shortName}
-                      </span>
+                      <TeamBadge team={team} size={24} />
                       <span className="truncate">{team.name}</span>
                     </div>
                   </td>
@@ -170,12 +166,7 @@ function GroupTable({ groupName, teamIds, comp }: { groupName: string; teamIds: 
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <span
-                      className="w-5 h-5 rounded text-[9px] flex items-center justify-center font-bold"
-                      style={{ backgroundColor: team.primaryColor, color: team.secondaryColor }}
-                    >
-                      {team.shortName}
-                    </span>
+                    <TeamBadge team={team} size={20} />
                     <span className="text-sm truncate">{team.name}</span>
                   </div>
                 </td>
@@ -257,12 +248,7 @@ function KnockoutPairRow({ pair, comp }: { pair: KnockoutPair; comp: Competition
             key={team.id}
             className={`flex items-center gap-2 text-sm ${isWinner ? 'font-semibold' : 'text-white/70'} ${isUser ? 'text-pitch-300' : ''}`}
           >
-            <span
-              className="w-5 h-5 rounded text-[9px] flex items-center justify-center font-bold shrink-0"
-              style={{ backgroundColor: team.primaryColor, color: team.secondaryColor }}
-            >
-              {team.shortName}
-            </span>
+            <TeamBadge team={team} size={20} className="shrink-0" />
             <span className="flex-1 truncate">{team.name}</span>
             {agg !== null && (
               <span className={`w-6 text-center font-bold ${isWinner ? 'text-white' : 'text-white/40'}`}>

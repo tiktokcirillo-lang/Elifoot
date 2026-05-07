@@ -5,6 +5,7 @@ import { buildBrasileiraoTeams } from '@/data/brasileiraoTeams';
 import { loadCustomTeams } from '@/pages/CustomTeamPage';
 import type { CustomTeamSeed } from '@/pages/CustomTeamPage';
 import { ArrowLeft, Plus, Pencil } from 'lucide-react';
+import TeamBadge from '@/components/TeamBadge';
 
 const brTeamsPreview = buildBrasileiraoTeams();
 
@@ -32,11 +33,8 @@ export default function NewGamePage() {
       onClick={() => setSelectedTeam(id)}
       className={`panel p-3 text-left transition-all hover:scale-[1.02] ${selectedTeam === id ? 'ring-2 ring-pitch-500' : ''}`}
     >
-      <div
-        className="w-full aspect-square rounded mb-2 flex items-center justify-center font-bold"
-        style={{ backgroundColor: primary, color: secondary }}
-      >
-        {shortName}
+      <div className="w-full flex justify-center mb-2">
+        <TeamBadge team={{ id, shortName, primaryColor: primary, secondaryColor: secondary }} size={64} />
       </div>
       <div className="text-xs font-semibold truncate">{name}</div>
       <div className="text-[10px] text-white/50">{tier.toUpperCase()}</div>
