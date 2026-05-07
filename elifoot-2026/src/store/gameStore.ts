@@ -31,6 +31,11 @@ import { buildBrasileiraoTeams } from '@/data/brasileiraoTeams';
 import { buildSerieBTeams } from '@/data/serieBTeams';
 import { buildSerieCTeams } from '@/data/serieCTeams';
 import { buildExtraTeams, LIBERTADORES_EXTRA_SEEDS, CHAMPIONS_EXTRA_SEEDS, PAULISTAO_EXTRA_SEEDS, SULAMERICANA_EXTRA_SEEDS, MUNDIAL_EXTRA_SEEDS, COPA_MUNDO_SEEDS } from '@/data/extraTeams';
+import { buildPremierLeagueTeams, PREMIER_LEAGUE_TEAM_IDS } from '@/data/premierLeagueTeams';
+import { buildLaLigaTeams, LA_LIGA_TEAM_IDS } from '@/data/laLigaTeams';
+import { buildSerieATeams, SERIE_A_TEAM_IDS } from '@/data/serieATeams';
+import { buildBundesligaTeams, BUNDESLIGA_TEAM_IDS } from '@/data/bundesligaTeams';
+import { buildLigue1Teams, LIGUE1_TEAM_IDS } from '@/data/ligue1Teams';
 import { persistSave, loadSave } from '@/db/database';
 import { resolveKnockoutsForSave } from '@/engine/knockoutEngine';
 import { applyWeeklyTraining } from '@/engine/trainingEngine';
@@ -80,6 +85,27 @@ export function isEligibleForSerieATransfer(
 
 // Times do estado de São Paulo elegíveis para o Paulistão
 const SP_TEAM_IDS = new Set(['pal', 'cor', 'sao', 'rbb']);
+
+// Ligas europeias — mapeamento para detecção automática pelo ID do time
+interface EuLeagueDef {
+  id: string;
+  name: string;
+  shortName: string;
+  teamIds: string[];
+  builder: () => Team[];
+}
+
+const EU_LEAGUES: EuLeagueDef[] = [
+  { id: 'pl',         name: 'Premier League', shortName: 'PL',          teamIds: PREMIER_LEAGUE_TEAM_IDS, builder: buildPremierLeagueTeams },
+  { id: 'laliga',     name: 'La Liga',        shortName: 'La Liga',     teamIds: LA_LIGA_TEAM_IDS,        builder: buildLaLigaTeams },
+  { id: 'seriea',     name: 'Serie A',        shortName: 'Serie A',     teamIds: SERIE_A_TEAM_IDS,        builder: buildSerieATeams },
+  { id: 'bundesliga', name: 'Bundesliga',     shortName: 'Bundesliga',  teamIds: BUNDESLIGA_TEAM_IDS,     builder: buildBundesligaTeams },
+  { id: 'ligue1',     name: 'Ligue 1',        shortName: 'Ligue 1',     teamIds: LIGUE1_TEAM_IDS,         builder: buildLigue1Teams },
+];
+
+function detectEuLeague(teamId: string): EuLeagueDef | null {
+  return EU_LEAGUES.find((l) => l.teamIds.includes(teamId)) ?? null;
+}
 
 // ============================================================
 // Estado
@@ -292,6 +318,7 @@ function generateInitialCompetitions(
   previousBrasileiraoStandings?: CompetitionStanding[],
   previousLibertadoresFinalists?: { champion?: string; runnerUp?: string },
   previousChampionsChampion?: string,
+  europeanLeagueConfig?: { id: string; name: string; shortName: string; teamIds: string[] },
 ): Competition[] {
   const brTeamIds = teams.map((t) => t.id);
   // Série B and C teams in allTeams
@@ -541,6 +568,26 @@ function generateInitialCompetitions(
     }
   }
 
+  // ── Liga europeia (quando o user joga em um clube europeu) ──
+  if (europeanLeagueConfig) {
+    const euLeagueTeamIds = europeanLeagueConfig.teamIds.filter((id) =>
+      allTeams.some((t) => t.id === id),
+    );
+    if (euLeagueTeamIds.length >= 10) {
+      const euLeague = createBrasileirao({
+        teamIds: euLeagueTeamIds,
+        season,
+        startTurn: 1,
+        turnsBetweenRounds: 7,
+        seed: season * 1000 + 15,
+        id: `${europeanLeagueConfig.id}_${season}`,
+        name: europeanLeagueConfig.name,
+        shortName: europeanLeagueConfig.shortName,
+      });
+      result.push(euLeague);
+    }
+  }
+
   return result;
 }
 
@@ -762,6 +809,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   async newGame(managerName, teamId, saveName) {
     const brTeams = buildBrasileiraoTeams();
 
+    // Detecta se o user escolheu um time de liga europeia
+    const euLeagueDef = detectEuLeague(teamId);
+    let euLeagueTeams: Team[] = [];
+    let europeanLeagueForComp: { id: string; name: string; shortName: string; teamIds: string[] } | undefined;
+
     // Suporte a times customizados: substituem o Avaí (último da tabela) no Brasileirão
     if (teamId.startsWith('custom_')) {
       try {
@@ -785,6 +837,18 @@ export const useGameStore = create<GameState>((set, get) => ({
       } catch (e) {
         throw new Error('Erro ao carregar time personalizado');
       }
+    } else if (euLeagueDef) {
+      // Time de liga europeia
+      euLeagueTeams = euLeagueDef.builder();
+      const userTeam = euLeagueTeams.find((t) => t.id === teamId);
+      if (!userTeam) throw new Error('Time europeu não encontrado');
+      userTeam.isUserControlled = true;
+      europeanLeagueForComp = {
+        id: euLeagueDef.id,
+        name: euLeagueDef.name,
+        shortName: euLeagueDef.shortName,
+        teamIds: euLeagueDef.teamIds,
+      };
     } else {
       const userTeam = brTeams.find((t) => t.id === teamId);
       if (!userTeam) throw new Error('Time não encontrado');
@@ -799,13 +863,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       ...MUNDIAL_EXTRA_SEEDS,
       ...COPA_MUNDO_SEEDS,
     ]);
+    // Remove duplicatas: times da liga europeia têm prioridade sobre extraTeams (mesmos IDs)
+    const euLeagueTeamIdSet = new Set(euLeagueTeams.map((t) => t.id));
+    const extraTeamsFiltered = extraTeams.filter((t) => !euLeagueTeamIdSet.has(t.id));
+
     const serieBTeams = buildSerieBTeams();
     const serieCTeams = buildSerieCTeams();
-    const allTeams = [...brTeams, ...extraTeams, ...serieBTeams, ...serieCTeams];
+    const allTeams = [...brTeams, ...euLeagueTeams, ...extraTeamsFiltered, ...serieBTeams, ...serieCTeams];
     const resolvedUserTeam = allTeams.find((t) => t.id === teamId);
     if (!resolvedUserTeam) throw new Error('Time não encontrado após setup');
 
-    const competitions = generateInitialCompetitions(brTeams, allTeams, teamId, 2026);
+    const competitions = generateInitialCompetitions(brTeams, allTeams, teamId, 2026, undefined, undefined, undefined, europeanLeagueForComp);
 
     const save: SaveGame = {
       id: nanoid(10),
@@ -2032,7 +2100,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
 
     // Captura classificação real do Brasileirão antes de reiniciar
-    const prevBrasileirao = save.competitions.find((c) => c.format === 'round_robin');
+    const prevBrasileirao = save.competitions.find(
+      (c) => c.format === 'round_robin' && (c.shortName === 'Brasileirão' || c.id.startsWith('brasileirao_')),
+    );
     const prevBrasileiraoStandings = prevBrasileirao
       ? sortStandings(prevBrasileirao.standings, save.teams)
       : undefined;
@@ -2065,6 +2135,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     ];
     const missingExtras = buildExtraTeams(allExtraSeeds.filter((s) => !knownIds.has(s.id)));
     save.teams.push(...missingExtras);
+    // Garante que times da liga europeia do user estejam em save.teams
+    const userEuLeague = detectEuLeague(save.controlledTeamId);
+    if (userEuLeague) {
+      const euLeagueKnownIds = new Set(save.teams.map((t) => t.id));
+      userEuLeague.builder().filter((t) => !euLeagueKnownIds.has(t.id)).forEach((t) => save.teams.push(t));
+    }
     // Garante que times da Série B estejam em save.teams
     buildSerieBTeams().filter((t) => !knownIds.has(t.id)).forEach((t) => save.teams.push(t));
     // Garante que times da Série C estejam em save.teams
@@ -2076,6 +2152,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     const brTeams = save.teams.filter(
       (t) => t.division === 'A' || (ORIGINAL_SERIE_A.has(t.id) && t.division !== 'B' && t.division !== 'C'),
     );
+    const europeanLeagueForComp = userEuLeague
+      ? { id: userEuLeague.id, name: userEuLeague.name, shortName: userEuLeague.shortName, teamIds: userEuLeague.teamIds }
+      : undefined;
     const comps = generateInitialCompetitions(
       brTeams,
       save.teams,
@@ -2084,6 +2163,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       prevBrasileiraoStandings,
       prevLibertadoresFinalists,
       prevChampionsChampion,
+      europeanLeagueForComp,
     );
     save.competitions = comps;
 
