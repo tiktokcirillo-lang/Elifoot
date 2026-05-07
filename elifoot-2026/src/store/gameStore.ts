@@ -304,11 +304,13 @@ function generateInitialCompetitions(
     seed: season * 1000 + 1,
   });
 
-  // ── Copa do Brasil (top 16 por reputação, garante time do user) ──
+  // ── Copa do Brasil (top 16 por reputação, garante time do user se for BR) ──
   const sortedByRep = [...teams].sort((a, b) => b.reputation - a.reputation);
+  const userIsBrTeam = teams.some((t) => t.id === userTeamId);
   let copaTeams = sortedByRep.slice(0, 16);
-  if (!copaTeams.find((t) => t.id === userTeamId)) {
-    copaTeams = [...sortedByRep.slice(0, 15), teams.find((t) => t.id === userTeamId)!];
+  if (userIsBrTeam && !copaTeams.find((t) => t.id === userTeamId)) {
+    const userTeamObj = teams.find((t) => t.id === userTeamId);
+    if (userTeamObj) copaTeams = [...sortedByRep.slice(0, 15), userTeamObj];
   }
   const copa = createCopaDoBrasil({
     teamIds: copaTeams.map((t) => t.id),
@@ -327,10 +329,14 @@ function generateInitialCompetitions(
     top6BrIds = sortedByRep.slice(0, 6).map((t) => t.id);
   }
 
-  const saTeams = allTeams
+  const userIsSaTeam = LIBERTADORES_EXTRA_SEEDS.some((s) => s.id === userTeamId);
+  let saTeams = allTeams
     .filter((t) => LIBERTADORES_EXTRA_SEEDS.some((s) => s.id === t.id))
     .slice(0, 10)
     .map((t) => t.id);
+  if (userIsSaTeam && !top6BrIds.includes(userTeamId) && !saTeams.includes(userTeamId)) {
+    saTeams = [...saTeams.slice(0, 9), userTeamId];
+  }
   const libTeamIds = [...top6BrIds, ...saTeams]; // 16 times, 4 grupos de 4
 
   const libertadores = createGroupsKnockout({
@@ -354,8 +360,8 @@ function generateInitialCompetitions(
   } else {
     brSulTeamIds = sortedByRep.slice(6, 12).map((t) => t.id);
   }
-  // Garante que o time do user está na Sul-Americana se não entrou na Libertadores
-  if (!top6BrIds.includes(userTeamId) && !brSulTeamIds.includes(userTeamId)) {
+  // Garante que o time do user está na Sul-Americana se for BR e não entrou na Libertadores
+  if (userIsBrTeam && !top6BrIds.includes(userTeamId) && !brSulTeamIds.includes(userTeamId)) {
     brSulTeamIds = [...brSulTeamIds.slice(0, 5), userTeamId];
   }
   const saExtraIds = allTeams
@@ -378,11 +384,13 @@ function generateInitialCompetitions(
     seed: season * 1000 + 6,
   });
 
-  // ── Champions League (16 times europeus, fundo de tela) ───
-  const euTeamIds = allTeams
-    .filter((t) => CHAMPIONS_EXTRA_SEEDS.some((s) => s.id === t.id))
-    .slice(0, 16)
-    .map((t) => t.id);
+  // ── Champions League (16 times europeus, garante time do user se for EU) ───
+  const userIsEuTeam = CHAMPIONS_EXTRA_SEEDS.some((s) => s.id === userTeamId);
+  const euTeamsSorted = allTeams.filter((t) => CHAMPIONS_EXTRA_SEEDS.some((s) => s.id === t.id));
+  let euTeamIds = euTeamsSorted.slice(0, 16).map((t) => t.id);
+  if (userIsEuTeam && !euTeamIds.includes(userTeamId)) {
+    euTeamIds = [...euTeamIds.slice(0, 15), userTeamId];
+  }
 
   const champions = createGroupsKnockout({
     teamIds: euTeamIds,
