@@ -146,6 +146,7 @@ export default function SquadPage() {
               const contractExpired  = p.contractUntil < save.season;
               const contractExpiring = !contractExpired && p.contractUntil <= save.season + 1;
               const contractColor = contractExpired ? 'text-red-400' : contractExpiring ? 'text-yellow-400' : 'text-white/40';
+              const leavingFree = p.leavingFree === true;
               return (
                 <li
                   key={p.id}
@@ -161,7 +162,8 @@ export default function SquadPage() {
                     <div className="font-semibold text-sm truncate flex items-center gap-1">
                       {isStarter && <Star className="w-3 h-3 text-gold-500 fill-gold-500" />}
                       {p.id === captainId && <Crown className="w-3 h-3 text-yellow-400" aria-label="Capitão" />}
-                      {(contractExpired || contractExpiring) && <AlertTriangle className={`w-3 h-3 ${contractExpired ? 'text-red-400' : 'text-yellow-400'}`} />}
+                      {(contractExpired || contractExpiring) && !leavingFree && <AlertTriangle className={`w-3 h-3 ${contractExpired ? 'text-red-400' : 'text-yellow-400'}`} />}
+                      {leavingFree && <span className="text-[9px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-medium leading-none">Sai livre</span>}
                       {p.name}
                     </div>
                     <div className="text-xs text-white/50">

@@ -1,6 +1,6 @@
 import { useGameStore } from '@/store/gameStore';
-import { calcWeeklyCashflow } from '@/engine/financeEngine';
-import { TrendingUp, TrendingDown, Target, CheckCircle, XCircle, Clock, DollarSign } from 'lucide-react';
+import { calcWeeklyCashflow, getWageSummary } from '@/engine/financeEngine';
+import { TrendingUp, TrendingDown, Target, CheckCircle, XCircle, Clock, DollarSign, Users, AlertTriangle } from 'lucide-react';
 import type { BoardObjective, FinanceRecord } from '@/types';
 
 export default function FinancePage() {
@@ -9,6 +9,7 @@ export default function FinancePage() {
 
   const userTeam = save.teams.find((t) => t.id === save.controlledTeamId)!;
   const cashflow = calcWeeklyCashflow(save);
+  const wageSummary = getWageSummary(save);
 
   const totalIncome = save.financeHistory
     .filter((r) => r.amount > 0)
@@ -47,6 +48,57 @@ export default function FinancePage() {
         />
       </div>
 
+      {/* Folha salarial vs. orçamento */}
+      <div className="panel p-5">
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Users className="w-4 h-4 text-pitch-400" /> Folha Salarial
+        </h3>
+        <div className="space-y-3 text-sm">
+          {/* Barra de saúde */}
+          <div>
+            <div className="flex justify-between mb-1 text-xs text-white/60">
+              <span>Custo mensal: R$ {(wageSummary.totalMonthlyCost / 1000).toFixed(1)}M</span>
+              <span>Limite: R$ {(wageSummary.wageBudget / 1000).toFixed(1)}M</span>
+            </div>
+            <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  wageSummary.status === 'critical' ? 'bg-red-500' :
+                  wageSummary.status === 'warning'  ? 'bg-yellow-500' : 'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(wageSummary.usedPercent, 100)}%` }}
+              />
+            </div>
+            <div className={`text-xs mt-1 font-semibold flex items-center gap-1 ${
+              wageSummary.status === 'critical' ? 'text-red-400' :
+              wageSummary.status === 'warning'  ? 'text-yellow-400' : 'text-green-400'
+            }`}>
+              {wageSummary.status === 'critical' && <AlertTriangle className="w-3 h-3" />}
+              {wageSummary.usedPercent}% do limite —{' '}
+              {wageSummary.status === 'critical' ? 'CRÍTICO — reduza a folha' :
+               wageSummary.status === 'warning'  ? 'Atenção — próximo do limite' : 'Saudável'}
+            </div>
+          </div>
+          {/* Detalhes */}
+          <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+            <div className="bg-white/5 rounded-lg p-2">
+              <div className="text-white/40 mb-0.5">Salários do elenco</div>
+              <div className="font-semibold">R$ {(wageSummary.monthlyWages / 1000).toFixed(1)}M/mês</div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-2">
+              <div className="text-white/40 mb-0.5">Taxas de empréstimo</div>
+              <div className="font-semibold">R$ {(wageSummary.loanFeesMonthly / 1000).toFixed(1)}M/mês</div>
+            </div>
+          </div>
+          {wageSummary.status !== 'healthy' && (
+            <p className="text-xs text-white/40">
+              Folha acima de 80% do orçamento base reduz a confiança da diretoria progressivamente.
+              Venda jogadores ou reduza salários nas renovações.
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* Fluxo de caixa semanal */}
       <div className="panel p-5">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
@@ -58,6 +110,9 @@ export default function FinancePage() {
           <CashflowRow label="Bilheteria (por jogo em casa)" amount={cashflow.projectedTickets} note="por jogo" />
           <div className="border-t border-white/10 pt-2 mt-2" />
           <CashflowRow label="Folha salarial" amount={-cashflow.weeklyWages} />
+          {cashflow.weeklyLoanFees > 0 && (
+            <CashflowRow label="Taxas de empréstimo" amount={-cashflow.weeklyLoanFees} />
+          )}
           <div className="border-t border-white/10 pt-2 mt-2 font-semibold">
             <CashflowRow
               label="Saldo líquido semanal (sem bilheteria)"

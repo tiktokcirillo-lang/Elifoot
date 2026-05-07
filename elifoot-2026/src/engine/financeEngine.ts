@@ -120,6 +120,22 @@ export function processWeeklyFinances(save: SaveGame): void {
     amount: -weeklyWages,
     description: `Folha salarial (${userTeam.squad.length} atletas)`,
   });
+
+  // 4. Taxas de empréstimo (mensais / 4 por semana)
+  const activeLoans = (save.activeLoans ?? []).filter(
+    (l) => l.loanedToTeamId === save.controlledTeamId,
+  );
+  const weeklyLoanFees = Math.round(
+    activeLoans.reduce((s, l) => s + l.loanFeeMonthly, 0) / 4,
+  );
+  if (weeklyLoanFees > 0) {
+    userTeam.budget -= weeklyLoanFees;
+    addRecord(save, {
+      type: 'wages',
+      amount: -weeklyLoanFees,
+      description: `Taxas de empréstimo (${activeLoans.length} atleta${activeLoans.length > 1 ? 's' : ''})`,
+    });
+  }
 }
 
 // ============================================================
@@ -150,13 +166,14 @@ export interface WeeklyCashflow {
   sponsorIncome: number;
   tvIncome: number;
   weeklyWages: number;
-  projectedTickets: number; // estimativa por semana baseada em jogos em casa
+  weeklyLoanFees: number;
+  projectedTickets: number;
   net: number;
 }
 
 export function calcWeeklyCashflow(save: SaveGame): WeeklyCashflow {
   const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
-  if (!userTeam) return { sponsorIncome: 0, tvIncome: 0, weeklyWages: 0, projectedTickets: 0, net: 0 };
+  if (!userTeam) return { sponsorIncome: 0, tvIncome: 0, weeklyWages: 0, weeklyLoanFees: 0, projectedTickets: 0, net: 0 };
 
   const activeDeal = save.sponsorOffers?.find(
     (o) => o.status === 'active' && o.activeUntil != null && o.activeUntil >= save.season,
@@ -166,6 +183,11 @@ export function calcWeeklyCashflow(save: SaveGame): WeeklyCashflow {
     : Math.round(userTeam.reputation * 20);
   const tvIncome = TV_RIGHTS_WEEKLY[userTeam.tier];
   const weeklyWages = Math.round(userTeam.squad.reduce((s, p) => s + p.wageMonthly, 0) / 4);
+  const weeklyLoanFees = Math.round(
+    (save.activeLoans ?? [])
+      .filter((l) => l.loanedToTeamId === save.controlledTeamId)
+      .reduce((s, l) => s + l.loanFeeMonthly, 0) / 4,
+  );
   const avgAttendance = 0.65 + (userTeam.reputation / 100) * 0.25;
   const projectedTickets = Math.round(
     (STADIUM_CAPACITY[userTeam.tier] * avgAttendance * TICKET_PRICE[userTeam.tier]) / 1000,
@@ -175,7 +197,53 @@ export function calcWeeklyCashflow(save: SaveGame): WeeklyCashflow {
     sponsorIncome,
     tvIncome,
     weeklyWages,
+    weeklyLoanFees,
     projectedTickets,
-    net: sponsorIncome + tvIncome - weeklyWages,
+    net: sponsorIncome + tvIncome - weeklyWages - weeklyLoanFees,
+  };
+}
+
+// ============================================================
+// Resumo da folha salarial vs. orçamento
+// ============================================================
+
+export interface WageSummary {
+  monthlyWages: number;       // salários mensais do elenco
+  loanFeesMonthly: number;    // taxas mensais de empréstimos recebidos
+  totalMonthlyCost: number;   // soma dos dois
+  wageBudget: number;         // limite saudável (65% da receita base mensal)
+  usedPercent: number;        // totalMonthlyCost / wageBudget × 100
+  status: 'healthy' | 'warning' | 'critical';
+}
+
+export function getWageSummary(save: SaveGame): WageSummary {
+  const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+  if (!userTeam) {
+    return { monthlyWages: 0, loanFeesMonthly: 0, totalMonthlyCost: 0, wageBudget: 1, usedPercent: 0, status: 'healthy' };
+  }
+
+  const activeDeal = save.sponsorOffers?.find(
+    (o) => o.status === 'active' && o.activeUntil != null && o.activeUntil >= save.season,
+  );
+  const weeklyBaseIncome =
+    (activeDeal ? Math.round(activeDeal.valuePerSeason / SEASON_WEEKS) : Math.round(userTeam.reputation * 20))
+    + TV_RIGHTS_WEEKLY[userTeam.tier];
+  const monthlyBaseIncome = weeklyBaseIncome * 4;
+  const wageBudget = Math.round(monthlyBaseIncome * 0.65);
+
+  const monthlyWages = userTeam.squad.reduce((s, p) => s + p.wageMonthly, 0);
+  const loanFeesMonthly = (save.activeLoans ?? [])
+    .filter((l) => l.loanedToTeamId === save.controlledTeamId)
+    .reduce((s, l) => s + l.loanFeeMonthly, 0);
+  const totalMonthlyCost = monthlyWages + loanFeesMonthly;
+  const usedPercent = wageBudget > 0 ? Math.round((totalMonthlyCost / wageBudget) * 100) : 0;
+
+  return {
+    monthlyWages,
+    loanFeesMonthly,
+    totalMonthlyCost,
+    wageBudget,
+    usedPercent,
+    status: usedPercent >= 100 ? 'critical' : usedPercent >= 80 ? 'warning' : 'healthy',
   };
 }

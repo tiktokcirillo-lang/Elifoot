@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useGameStore, isTransferWindowOpen } from '@/store/gameStore';
 import type { Player } from '@/types';
-import { ShoppingCart, X, Tag, ArrowRightLeft, ChevronDown, ChevronUp, Lock, RefreshCw } from 'lucide-react';
+import { ShoppingCart, X, Tag, ArrowRightLeft, ChevronDown, ChevronUp, Lock, RefreshCw, Handshake } from 'lucide-react';
 
-type Tab = 'market' | 'my_players' | 'my_bids';
+type Tab = 'market' | 'loans' | 'my_players' | 'my_bids';
 
 export default function TransferPage() {
   const [tab, setTab] = useState<Tab>('market');
@@ -52,21 +52,22 @@ export default function TransferPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-midnight-800 rounded-lg p-1">
-        {(['market', 'my_players', 'my_bids'] as Tab[]).map((t) => (
+      <div className="flex gap-1 bg-midnight-800 rounded-lg p-1 flex-wrap">
+        {(['market', 'loans', 'my_players', 'my_bids'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 text-sm py-2 rounded-md transition-colors ${
+            className={`flex-1 text-sm py-2 rounded-md transition-colors min-w-[80px] ${
               tab === t ? 'bg-pitch-600 text-white font-semibold' : 'text-white/60 hover:text-white'
             }`}
           >
-            {t === 'market' ? 'Disponíveis' : t === 'my_players' ? 'Meus Jogadores' : 'Minhas Ofertas'}
+            {t === 'market' ? 'Disponíveis' : t === 'loans' ? 'Empréstimos' : t === 'my_players' ? 'Meu Elenco' : 'Minhas Ofertas'}
           </button>
         ))}
       </div>
 
       {tab === 'market' && <MarketTab windowOpen={windowOpen} />}
+      {tab === 'loans' && <LoansTab />}
       {tab === 'my_players' && <MyPlayersTab windowOpen={windowOpen} />}
       {tab === 'my_bids' && <MyBidsTab />}
     </div>
@@ -384,6 +385,111 @@ function MyBidsTab() {
 }
 
 // ── Componentes auxiliares ────────────────────────────────────
+
+// ── Aba: Empréstimos ──────────────────────────────────────────
+
+function LoansTab() {
+  const save = useGameStore((s) => s.save)!;
+  const acceptLoanOffer = useGameStore((s) => s.acceptLoanOffer);
+  const rejectLoanOffer = useGameStore((s) => s.rejectLoanOffer);
+  const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+
+  const availableLoans = (save.loanMarket ?? []).filter((o) => o.status === 'available');
+  const activeLoans = (save.activeLoans ?? []).filter((l) => l.loanedToTeamId === save.controlledTeamId);
+
+  return (
+    <div className="space-y-4">
+      {/* Empréstimos ativos */}
+      {activeLoans.length > 0 && (
+        <div className="panel overflow-hidden">
+          <div className="bg-white/5 px-4 py-2 text-xs uppercase tracking-wider font-semibold text-white/60">
+            Emprestados ao seu clube
+          </div>
+          <div className="divide-y divide-white/5">
+            {activeLoans.map((loan) => {
+              const player = userTeam?.squad.find((p) => p.id === loan.playerId);
+              const origTeam = save.teams.find((t) => t.id === loan.originalTeamId);
+              if (!player) return null;
+              return (
+                <div key={loan.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-10 h-10 rounded-full bg-midnight-700 flex items-center justify-center text-sm font-bold shrink-0">
+                    {player.overall}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm">{player.name}</div>
+                    <div className="text-xs text-white/40">
+                      {player.position} · {player.age} anos · de {origTeam?.name ?? '?'}
+                    </div>
+                  </div>
+                  <div className="text-right text-xs">
+                    <div className="text-red-400 font-semibold">R$ {loan.loanFeeMonthly}k/mês</div>
+                    <div className="text-white/30">até {loan.loanUntil}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Ofertas disponíveis */}
+      <div className="panel overflow-hidden">
+        <div className="bg-white/5 px-4 py-2 text-xs uppercase tracking-wider font-semibold text-white/60 flex items-center gap-2">
+          <Handshake className="w-3.5 h-3.5" /> Jogadores disponíveis para empréstimo
+        </div>
+        {availableLoans.length === 0 ? (
+          <div className="px-4 py-8 text-center text-white/40 text-sm">
+            Nenhuma oferta disponível no momento. Avance alguns turnos.
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {availableLoans.map((offer) => {
+              const lenderTeam = save.teams.find((t) => t.id === offer.fromTeamId);
+              const player = lenderTeam?.squad.find((p) => p.id === offer.playerId);
+              if (!player || !lenderTeam) return null;
+              return (
+                <div key={offer.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-10 h-10 rounded-full bg-midnight-700 flex items-center justify-center text-sm font-bold shrink-0">
+                    {player.overall}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm">{player.name}</div>
+                    <div className="text-xs text-white/40">
+                      {player.position} · {player.age} anos · Pot {player.potential ?? '?'} · {lenderTeam.shortName}
+                    </div>
+                    <div className="flex gap-2 text-[10px] text-white/30 mt-0.5">
+                      <span>ATK {player.attack}</span>
+                      <span>DEF {player.defense}</span>
+                      <span>PAC {player.pace}</span>
+                      <span>TEC {player.technique}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <div className="text-gold-400 font-semibold text-xs">R$ {offer.loanFeeMonthly}k/mês</div>
+                    <div className="flex gap-1">
+                      <button
+                        className="btn-primary text-xs px-2.5 py-1"
+                        onClick={() => acceptLoanOffer(offer.id)}
+                      >
+                        Aceitar
+                      </button>
+                      <button
+                        className="btn-ghost text-xs px-2.5 py-1"
+                        onClick={() => rejectLoanOffer(offer.id)}
+                      >
+                        Recusar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function PlayerBadge({ player }: { player: Player }) {
   const colors: Record<string, string> = {

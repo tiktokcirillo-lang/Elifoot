@@ -40,7 +40,7 @@ import { persistSave, loadSave } from '@/db/database';
 import { resolveKnockoutsForSave } from '@/engine/knockoutEngine';
 import { applyWeeklyTraining } from '@/engine/trainingEngine';
 import { autoPickStartingEleven, generateYouthPlayer, generateSquad } from '@/engine/playerGenerator';
-import { processWeeklyFinances, processTicketRevenue, recordTransfer } from '@/engine/financeEngine';
+import { processWeeklyFinances, processTicketRevenue, recordTransfer, getWageSummary } from '@/engine/financeEngine';
 import { isSeasonOver, processSeasonEnd, generateBoardObjectives, startNewSeason } from '@/engine/seasonEngine';
 import { createRng } from '@/utils/random';
 import { generateAvailableScouts, generateScoutReport, generateLoanOffers } from '@/engine/scoutingEngine';
@@ -1007,6 +1007,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (loaded.isNationalTeamManager === undefined) loaded.isNationalTeamManager = false;
       if (!loaded.nationalTeamSquad) loaded.nationalTeamSquad = [];
       if (!loaded.nationalTeamResults) loaded.nationalTeamResults = [];
+      if (loaded.wageOverBudgetWeeks === undefined) loaded.wageOverBudgetWeeks = 0;
+      // Compat: leavingFree on players
+      loaded.teams.forEach((t) => t.squad.forEach((p) => { if (p.leavingFree === undefined) p.leavingFree = false; }));
       set({ save: loaded });
     }
   },
@@ -1127,6 +1130,25 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Finanças semanais (a cada 7 turnos)
     if (save.currentTurn % 7 === 0) {
       processWeeklyFinances(save);
+
+      // Verificação de folha salarial vs. orçamento
+      const wageSummary = getWageSummary(save);
+      if (wageSummary.usedPercent >= 100) {
+        save.wageOverBudgetWeeks = (save.wageOverBudgetWeeks ?? 0) + 1;
+        const weeks = save.wageOverBudgetWeeks;
+        if (weeks === 3) {
+          pushNews(save, {
+            type: 'finance',
+            title: 'Folha salarial acima do limite',
+            body: `A folha já consome ${wageSummary.usedPercent}% do orçamento base (limite: 65%). A diretoria está preocupada — revise salários ou venda jogadores.`,
+          });
+          save.boardConfidence = Math.max(0, (save.boardConfidence ?? 60) - 5);
+        } else if (weeks > 3 && weeks % 4 === 0) {
+          save.boardConfidence = Math.max(0, (save.boardConfidence ?? 60) - 3);
+        }
+      } else if (wageSummary.usedPercent < 90) {
+        save.wageOverBudgetWeeks = 0;
+      }
     }
 
     // Detecta fim de temporada
@@ -1234,17 +1256,20 @@ export const useGameStore = create<GameState>((set, get) => ({
           });
         }
         const contractPlayer = candidates.find(
-          (p) => p.contractUntil <= save.season && p.morale > 50 && !unresolved.includes(p.id)
+          (p) => p.contractUntil <= save.season + 1 && !unresolved.includes(p.id),
         );
         if (contractPlayer) {
+          const pct = contractPlayer.overall >= 86 ? 0.5 : contractPlayer.overall >= 81 ? 0.3 : 0.2;
+          const wageHigh = Math.round(contractPlayer.wageMonthly * (1 + pct));
+          const wageLow  = Math.round(contractPlayer.wageMonthly * (1 + pct * 0.5));
           save.playerInteractions.push({
             id: nanoid(8), playerId: contractPlayer.id, playerName: contractPlayer.name,
             type: 'contract_demand',
-            message: `${contractPlayer.name} quer discutir a renovação do contrato antes do fim da temporada.`,
+            message: `${contractPlayer.name} (OVR ${contractPlayer.overall}) quer renovar. Atual: R$ ${contractPlayer.wageMonthly}k/mês. Proposta dele: R$ ${wageHigh}k/mês.`,
             options: [
-              { label: 'Renovar com aumento de 15%', moraleEffect: 20, confidenceEffect: 8 },
-              { label: 'Oferecer renovação sem aumento', moraleEffect: 5, confidenceEffect: 2 },
-              { label: 'Não estamos interessados em renovar', moraleEffect: -20, confidenceEffect: -5 },
+              { label: `Aceitar: R$ ${wageHigh}k/mês (+${Math.round(pct * 100)}%), 3 anos`, moraleEffect: 20, confidenceEffect: 5 },
+              { label: `Negociar: R$ ${wageLow}k/mês (+${Math.round(pct * 50)}%), 2 anos`, moraleEffect: 5, confidenceEffect: 2 },
+              { label: 'Recusar — sai como livre ao fim da temporada', moraleEffect: -20, confidenceEffect: -5 },
             ],
             resolved: false, turn: save.currentTurn,
           });
@@ -2121,6 +2146,35 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Captura campeão da Champions League antes de reiniciar
     const prevChampionsChampion = save.competitions.find((c) => c.shortName === 'Champions')?.championId;
 
+    // Jogadores que recusaram renovação saem como livres
+    const userTeamPreSeason = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (userTeamPreSeason) {
+      const leaving = userTeamPreSeason.squad.filter((p) => p.leavingFree);
+      leaving.forEach((p) => {
+        pushNews(save, { type: 'transfer', title: `${p.name} saiu como livre`, body: `${p.name} não renovou o contrato e deixou o clube.` });
+      });
+      userTeamPreSeason.squad = userTeamPreSeason.squad.filter((p) => !p.leavingFree);
+      const remainingIds = new Set(userTeamPreSeason.squad.map((p) => p.id));
+      userTeamPreSeason.starting11 = userTeamPreSeason.starting11.filter((id) => remainingIds.has(id));
+      userTeamPreSeason.bench = userTeamPreSeason.bench.filter((id) => remainingIds.has(id));
+    }
+
+    // Devolução de jogadores emprestados ao fim da temporada
+    const userLoans = (save.activeLoans ?? []).filter((l) => l.loanedToTeamId === save.controlledTeamId);
+    for (const loan of userLoans) {
+      const teamFrom = save.teams.find((t) => t.id === save.controlledTeamId);
+      const teamTo   = save.teams.find((t) => t.id === loan.originalTeamId);
+      if (!teamFrom || !teamTo) continue;
+      const pidx = teamFrom.squad.findIndex((p) => p.id === loan.playerId);
+      if (pidx === -1) continue;
+      const loanedPlayer = teamFrom.squad.splice(pidx, 1)[0];
+      teamFrom.starting11 = teamFrom.starting11.filter((id) => id !== loanedPlayer.id);
+      teamFrom.bench = teamFrom.bench.filter((id) => id !== loanedPlayer.id);
+      teamTo.squad.push(loanedPlayer);
+      pushNews(save, { type: 'transfer', title: `${loanedPlayer.name} retornou`, body: `Fim do empréstimo: ${loanedPlayer.name} voltou para o ${teamTo.name}.` });
+    }
+    save.activeLoans = (save.activeLoans ?? []).filter((l) => l.loanedToTeamId !== save.controlledTeamId);
+
     startNewSeason(save);
 
     // Garante que os times extras (SA, EU, paulistas) estejam em save.teams
@@ -2607,9 +2661,38 @@ export const useGameStore = create<GameState>((set, get) => ({
     interaction.resolved = true;
     const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
     const player = userTeam?.squad.find((p) => p.id === interaction.playerId);
+
+    // Lógica especial para negociação de contrato
+    if (interaction.type === 'contract_demand' && player) {
+      const pct = player.overall >= 86 ? 0.5 : player.overall >= 81 ? 0.3 : 0.2;
+      if (optionIndex === 0) {
+        player.wageMonthly = Math.round(player.wageMonthly * (1 + pct));
+        player.contractUntil = save.season + 3;
+        player.leavingFree = false;
+        pushNews(save, { type: 'general', title: `Renovação: ${player.name}`, body: `${player.name} renovou por 3 anos. Novo salário: R$ ${player.wageMonthly}k/mês.` });
+      } else if (optionIndex === 1) {
+        player.wageMonthly = Math.round(player.wageMonthly * (1 + pct * 0.5));
+        player.contractUntil = save.season + 2;
+        player.leavingFree = false;
+        pushNews(save, { type: 'general', title: `Renovação negociada: ${player.name}`, body: `${player.name} renovou por 2 anos. Novo salário: R$ ${player.wageMonthly}k/mês.` });
+      } else {
+        player.leavingFree = true;
+        pushNews(save, { type: 'transfer', title: `${player.name} sairá livre`, body: `${player.name} não renovou e deixará o clube ao fim da temporada.` });
+      }
+    }
+
     if (player) player.morale = Math.max(0, Math.min(100, player.morale + option.moraleEffect));
     if (option.confidenceEffect) {
       save.boardConfidence = Math.max(0, Math.min(100, (save.boardConfidence ?? 60) + option.confidenceEffect));
+    }
+    if (option.acceptsRequest && player) {
+      const listing = save.transferMarket.find((l) => l.playerId === player.id && l.status === 'open');
+      if (!listing) {
+        save.transferMarket.push({
+          id: nanoid(8), playerId: player.id, fromTeamId: save.controlledTeamId,
+          askingPrice: player.marketValue, turn: save.currentTurn, status: 'open', bids: [],
+        });
+      }
     }
     set({ save });
   },

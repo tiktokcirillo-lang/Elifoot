@@ -231,6 +231,7 @@ export interface Player {
   contractUntil: number; // ano
   wageMonthly: number; // em milhares
   marketValue: number; // em milhares
+  leavingFree?: boolean; // jogador recusou renovação e sai ao fim da temporada
   // Estatísticas de temporada
   stats: PlayerSeasonStats;
 }
@@ -603,6 +604,8 @@ export interface SaveGame {
   squadMorale: number;
   // Propostas de emprego para o técnico
   managerJobOffers: ManagerJobOffer[];
+  // Folha salarial — semanas consecutivas acima do orçamento
+  wageOverBudgetWeeks?: number;
   // Promoção/rebaixamento da última temporada
   promotionRelegation?: PromotionRelegation;
   // Seleção Nacional
