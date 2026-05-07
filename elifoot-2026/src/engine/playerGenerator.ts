@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { Player, Position, TeamTier } from '@/types';
+import type { Player, Position, TeamTier, Formation } from '@/types';
 import { clamp, createRng } from '@/utils/random';
 
 const FIRST_NAMES = [
@@ -235,15 +235,23 @@ export function generateSquad(tier: TeamTier, seed: number): Player[] {
 
 export function autoPickStartingEleven(
   squad: Player[],
-  formation: '4-4-2' | '4-3-3' | '4-2-3-1' | '3-5-2' | '5-3-2' | '4-5-1' = '4-3-3',
+  formation: Formation = '4-3-3',
 ): { starting: string[]; bench: string[] } {
   const positions: Record<string, { GK: number; DF: number; MF: number; FW: number }> = {
-    '4-4-2': { GK: 1, DF: 4, MF: 4, FW: 2 },
-    '4-3-3': { GK: 1, DF: 4, MF: 3, FW: 3 },
+    '4-4-2':   { GK: 1, DF: 4, MF: 4, FW: 2 },
+    '4-3-3':   { GK: 1, DF: 4, MF: 3, FW: 3 },
     '4-2-3-1': { GK: 1, DF: 4, MF: 5, FW: 1 },
-    '3-5-2': { GK: 1, DF: 3, MF: 5, FW: 2 },
-    '5-3-2': { GK: 1, DF: 5, MF: 3, FW: 2 },
-    '4-5-1': { GK: 1, DF: 4, MF: 5, FW: 1 },
+    '3-5-2':   { GK: 1, DF: 3, MF: 5, FW: 2 },
+    '5-3-2':   { GK: 1, DF: 5, MF: 3, FW: 2 },
+    '4-5-1':   { GK: 1, DF: 4, MF: 5, FW: 1 },
+    '3-4-3':   { GK: 1, DF: 3, MF: 4, FW: 3 },
+    '5-4-1':   { GK: 1, DF: 5, MF: 4, FW: 1 },
+    '5-2-3':   { GK: 1, DF: 5, MF: 2, FW: 3 },
+    '4-1-4-1': { GK: 1, DF: 4, MF: 5, FW: 1 },
+    '4-3-2-1': { GK: 1, DF: 4, MF: 5, FW: 1 },
+    '3-4-2-1': { GK: 1, DF: 3, MF: 6, FW: 1 },
+    '3-3-4':   { GK: 1, DF: 3, MF: 3, FW: 4 },
+    '4-6-0':   { GK: 1, DF: 4, MF: 6, FW: 0 },
   };
   const need = positions[formation];
 
