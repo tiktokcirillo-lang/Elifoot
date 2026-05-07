@@ -106,6 +106,8 @@ interface GameState {
   // Transferências
   listPlayerForSale: (playerId: string, askingPrice: number) => void;
   withdrawListing: (listingId: string) => void;
+  sellPlayerDirectly: (playerId: string, amount: number) => 'ok' | 'no_buyer' | 'not_found' | 'min_squad';
+  loanPlayerOut: (playerId: string, feeMonthly: number, seasons: number) => 'ok' | 'not_found' | 'min_squad';
   makeBid: (listingId: string, amount: number) => void;
   makeDirectOffer: (playerId: string, targetTeamId: string, amount: number) => 'ok' | 'already_offered' | 'no_budget' | 'not_found' | 'squad_full' | 'countered' | 'rejected';
   acceptBid: (listingId: string, bidId: string) => void;
@@ -1758,6 +1760,87 @@ export const useGameStore = create<GameState>((set, get) => ({
     const l = save.transferMarket.find((x) => x.id === listingId);
     if (l && l.fromTeamId === save.controlledTeamId) l.status = 'withdrawn';
     set({ save });
+  },
+
+  sellPlayerDirectly(playerId, amount) {
+    const state = get();
+    if (!state.save) return 'not_found';
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam) return 'not_found';
+    if (userTeam.squad.length <= 11) return 'min_squad'; // precisa ter mais do que a escalação mínima
+    const playerIdx = userTeam.squad.findIndex((p) => p.id === playerId);
+    if (playerIdx === -1) return 'not_found';
+    const player = userTeam.squad[playerIdx];
+
+    // Escolhe um time IA com budget suficiente e squad < 35
+    const rng = createRng(save.currentTurn * 17 + playerIdx);
+    const candidates = save.teams.filter(
+      (t) => t.id !== save.controlledTeamId && t.budget >= amount && t.squad.length < 35,
+    );
+    if (candidates.length === 0) return 'no_buyer';
+    const buyer = candidates[Math.floor(rng() * candidates.length)];
+
+    // Executa a venda
+    userTeam.squad.splice(playerIdx, 1);
+    userTeam.starting11 = userTeam.starting11.filter((id) => id !== playerId);
+    userTeam.bench = userTeam.bench.filter((id) => id !== playerId);
+    buyer.squad.push(player);
+    userTeam.budget += amount;
+    buyer.budget -= amount;
+    recordTransfer(save, player.name, amount, false);
+    pushNews(save, {
+      type: 'transfer',
+      title: `${player.name} vendido`,
+      body: `${player.name} foi vendido ao ${buyer.name} por R$ ${(amount / 1000).toFixed(1)}M.`,
+    });
+    set({ save });
+    return 'ok';
+  },
+
+  loanPlayerOut(playerId, feeMonthly, seasons) {
+    const state = get();
+    if (!state.save) return 'not_found';
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam) return 'not_found';
+    if (userTeam.squad.length <= 11) return 'min_squad';
+    const playerIdx = userTeam.squad.findIndex((p) => p.id === playerId);
+    if (playerIdx === -1) return 'not_found';
+    const player = userTeam.squad[playerIdx];
+
+    // Escolhe time IA com espaço no elenco
+    const rng = createRng(save.currentTurn * 31 + playerIdx);
+    const candidates = save.teams.filter(
+      (t) => t.id !== save.controlledTeamId && t.squad.length < 35,
+    );
+    if (candidates.length === 0) return 'not_found';
+    const dest = candidates[Math.floor(rng() * candidates.length)];
+
+    // Move o jogador temporariamente
+    userTeam.squad.splice(playerIdx, 1);
+    userTeam.starting11 = userTeam.starting11.filter((id) => id !== playerId);
+    userTeam.bench = userTeam.bench.filter((id) => id !== playerId);
+    dest.squad.push(player);
+
+    if (!save.activeLoans) save.activeLoans = [];
+    save.activeLoans.push({
+      id: nanoid(8),
+      playerId,
+      originalTeamId: save.controlledTeamId,
+      loanedToTeamId: dest.id,
+      loanFeeMonthly: feeMonthly,
+      loanUntil: save.season + seasons,
+      canRecall: true,
+    });
+
+    pushNews(save, {
+      type: 'transfer',
+      title: `${player.name} emprestado`,
+      body: `${player.name} foi emprestado ao ${dest.name} por ${seasons} temporada(s) a R$ ${feeMonthly}k/mês.`,
+    });
+    set({ save });
+    return 'ok';
   },
 
   makeBid(listingId, amount) {

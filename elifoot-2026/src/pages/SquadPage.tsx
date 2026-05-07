@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import type { Player, Position } from '@/types';
-import { Star, Heart, Activity, TrendingUp, ArrowUpCircle, RefreshCw, AlertTriangle, Crown } from 'lucide-react';
+import { Star, Heart, Activity, TrendingUp, ArrowUpCircle, RefreshCw, AlertTriangle, Crown, DollarSign, ArrowLeftRight, X } from 'lucide-react';
 
 const POS_OPTIONS: Position[] = ['GK', 'DF', 'MF', 'FW'];
 const POS_COLOR: Record<Position, string> = {
@@ -26,8 +26,52 @@ export default function SquadPage() {
   const promoteYouthPlayer = useGameStore((s) => s.promoteYouthPlayer);
   const renewContract = useGameStore((s) => s.renewContract);
   const changePlayerPosition = useGameStore((s) => s.changePlayerPosition);
+  const sellPlayerDirectly = useGameStore((s) => s.sellPlayerDirectly);
+  const loanPlayerOut = useGameStore((s) => s.loanPlayerOut);
   const [selected, setSelected] = useState<string[]>(() => userTeam?.starting11 ?? []);
   const [posPickerId, setPosPickerId] = useState<string | null>(null);
+  const [dealPlayer, setDealPlayer] = useState<Player | null>(null);
+  const [dealMode, setDealMode] = useState<'sell' | 'loan' | null>(null);
+  const [dealAmount, setDealAmount] = useState('');
+  const [dealSeasons, setDealSeasons] = useState('1');
+  const [dealFeedback, setDealFeedback] = useState<string | null>(null);
+
+  function openDeal(p: Player, mode: 'sell' | 'loan', e: React.MouseEvent) {
+    e.stopPropagation();
+    setDealPlayer(p);
+    setDealMode(mode);
+    setDealAmount((p.marketValue / 1000).toFixed(1));
+    setDealSeasons('1');
+  }
+
+  function confirmDeal() {
+    if (!dealPlayer || !dealMode) return;
+    const millions = parseFloat(dealAmount);
+    if (isNaN(millions) || millions < 0) return;
+    const amt = Math.round(millions * 1000);
+    if (dealMode === 'sell') {
+      const r = sellPlayerDirectly(dealPlayer.id, amt);
+      const msgs: Record<string, string> = {
+        ok: `✓ ${dealPlayer.name} vendido por R$ ${millions.toFixed(1)}M!`,
+        no_buyer: 'Nenhum time com budget suficiente encontrado. Tente um valor menor.',
+        min_squad: 'Elenco mínimo atingido. Você precisa de mais jogadores antes de vender.',
+        not_found: 'Jogador não encontrado.',
+      };
+      setDealFeedback(msgs[r] ?? r);
+    } else {
+      const fee = Math.round(millions * 1000);
+      const seasons = Math.max(1, parseInt(dealSeasons) || 1);
+      const r = loanPlayerOut(dealPlayer.id, fee, seasons);
+      const msgs: Record<string, string> = {
+        ok: `✓ ${dealPlayer.name} emprestado por ${seasons} temporada(s) a R$ ${millions.toFixed(1)}M/mês!`,
+        min_squad: 'Elenco mínimo atingido.',
+        not_found: 'Jogador não encontrado.',
+      };
+      setDealFeedback(msgs[r] ?? r);
+    }
+    setDealPlayer(null);
+    setDealMode(null);
+  }
 
   const captainId = save?.tacticalSetup?.captainId ?? null;
 
@@ -68,6 +112,13 @@ export default function SquadPage() {
 
   return (
     <div className="space-y-4">
+      {dealFeedback && (
+        <div className="panel p-4 border border-pitch-500/40 bg-pitch-900/20 flex items-center justify-between gap-3 text-sm text-pitch-300">
+          <span>{dealFeedback}</span>
+          <button onClick={() => setDealFeedback(null)}><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
       <div className="panel p-5 flex items-center justify-between flex-wrap gap-3">
         <div>
           <div className="text-xs uppercase tracking-wider text-white/50">Elenco</div>
@@ -133,6 +184,22 @@ export default function SquadPage() {
                     <span title="Físico" className="flex items-center gap-1">
                       <Activity className="w-3 h-3" /> {p.fitness}
                     </span>
+
+                    {/* Vender / Emprestar */}
+                    <button
+                      title="Vender jogador"
+                      className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-white/10 text-white/40 hover:text-green-400 hover:border-green-500/40 transition-colors"
+                      onClick={(e) => openDeal(p, 'sell', e)}
+                    >
+                      <DollarSign className="w-3 h-3" />
+                    </button>
+                    <button
+                      title="Emprestar jogador"
+                      className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-white/10 text-white/40 hover:text-blue-400 hover:border-blue-500/40 transition-colors"
+                      onClick={(e) => openDeal(p, 'loan', e)}
+                    >
+                      <ArrowLeftRight className="w-3 h-3" />
+                    </button>
 
                     {/* Seletor de posição */}
                     <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -211,6 +278,78 @@ export default function SquadPage() {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {/* Modal vender / emprestar */}
+      {dealPlayer && dealMode && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="panel p-6 w-full max-w-sm space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="font-bold text-lg">{dealPlayer.name}</div>
+                <div className="text-xs text-white/50">
+                  {dealPlayer.position} · {dealPlayer.age} anos · Overall {dealPlayer.overall}
+                </div>
+              </div>
+              <button onClick={() => setDealPlayer(null)}><X className="w-5 h-5 text-white/50" /></button>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${dealMode === 'sell' ? 'bg-green-600/20 border-green-500/50 text-green-300' : 'border-white/10 text-white/40 hover:bg-white/5'}`}
+                onClick={() => setDealMode('sell')}
+              >
+                <DollarSign className="w-4 h-4 inline mr-1" /> Vender
+              </button>
+              <button
+                className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${dealMode === 'loan' ? 'bg-blue-600/20 border-blue-500/50 text-blue-300' : 'border-white/10 text-white/40 hover:bg-white/5'}`}
+                onClick={() => setDealMode('loan')}
+              >
+                <ArrowLeftRight className="w-4 h-4 inline mr-1" /> Emprestar
+              </button>
+            </div>
+
+            <div className="text-xs text-white/40">
+              Valor de mercado: <span className="text-gold-400 font-semibold">R$ {(dealPlayer.marketValue / 1000).toFixed(1)}M</span>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/50 mb-1 block">
+                {dealMode === 'sell' ? 'Preço de venda (R$ M)' : 'Taxa mensal (R$ M/mês)'}
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/40">R$</span>
+                <input
+                  type="number" step="0.1" min="0"
+                  value={dealAmount}
+                  onChange={(e) => setDealAmount(e.target.value)}
+                  className="w-full bg-midnight-700 border border-white/10 rounded-lg pl-9 pr-10 py-2 text-sm text-white"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-white/40">M</span>
+              </div>
+            </div>
+
+            {dealMode === 'loan' && (
+              <div>
+                <label className="text-xs text-white/50 mb-1 block">Duração (temporadas)</label>
+                <div className="flex gap-2">
+                  {[1, 2, 3].map((s) => (
+                    <button
+                      key={s}
+                      className={`flex-1 py-2 text-sm rounded-lg border ${dealSeasons === String(s) ? 'bg-blue-600/20 border-blue-500/50 text-blue-300' : 'border-white/10 text-white/40 hover:bg-white/5'}`}
+                      onClick={() => setDealSeasons(String(s))}
+                    >
+                      {s} temp.
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button className="btn-primary w-full" onClick={confirmDeal}>
+              Confirmar {dealMode === 'sell' ? 'venda' : 'empréstimo'}
+            </button>
+          </div>
         </div>
       )}
     </div>
