@@ -402,7 +402,9 @@ function LoansTab() {
   const rejectLoanOffer = useGameStore((s) => s.rejectLoanOffer);
   const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
 
-  const availableLoans = (save.loanMarket ?? []).filter((o) => o.status === 'available');
+  const availableLoans = (save.loanMarket ?? []).filter(
+    (o) => o.status === 'available' && o.fromTeamId !== save.controlledTeamId,
+  );
   const activeLoans = (save.activeLoans ?? []).filter((l) => l.loanedToTeamId === save.controlledTeamId);
 
   return (

@@ -128,6 +128,7 @@ interface GameState {
   simulateSecondHalf: (fixtureId: string, firstHalfResult: MatchResult, subs: { outId: string; inId: string }[]) => Promise<MatchResult | null>;
   setUserStarting11: (ids: string[]) => void;
   renewContract: (playerId: string) => void;
+  negotiateContract: (playerId: string, choice: 'full' | 'counter' | 'minimal' | 'refuse') => 'ok' | 'refused' | 'not_found' | 'no_budget';
   changePlayerPosition: (playerId: string, newPosition: import('@/types').Position) => void;
 
   // Transferências
@@ -1842,6 +1843,110 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ save });
   },
 
+  negotiateContract(playerId, choice) {
+    const state = get();
+    if (!state.save) return 'not_found';
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+    if (!userTeam) return 'not_found';
+    const player = userTeam.squad.find((p) => p.id === playerId);
+    if (!player) return 'not_found';
+
+    // Calcula a exigência do jogador com base no overall
+    const demandPct = player.overall >= 86 ? 0.50 : player.overall >= 81 ? 0.30 : player.overall >= 71 ? 0.20 : 0.12;
+    const wageFullDemand  = Math.round(player.wageMonthly * (1 + demandPct));
+    const wageCounter     = Math.round(player.wageMonthly * (1 + demandPct * 0.55));
+    const wageMinimal     = Math.round(player.wageMonthly * 1.06);
+
+    // Jogadores de alto nível podem recusar contraproposta fraca
+    const topPlayer = player.overall >= 80;
+
+    if (choice === 'refuse') {
+      player.leavingFree = true;
+      player.morale = Math.max(0, player.morale - 20);
+      pushNews(save, {
+        type: 'transfer',
+        title: `${player.name} sairá como livre`,
+        body: `A renovação foi recusada. ${player.name} (OVR ${player.overall}) vai encerrar o contrato no final da temporada.`,
+      });
+      set({ save });
+      return 'ok';
+    }
+
+    if (choice === 'full') {
+      const bonus = Math.round(wageFullDemand * 0.5); // bônus de assinatura = meio mês
+      if (userTeam.budget < bonus) { set({ save }); return 'no_budget'; }
+      userTeam.budget -= bonus;
+      player.wageMonthly = wageFullDemand;
+      player.contractUntil = save.season + 3;
+      player.morale = Math.min(100, player.morale + 15);
+      player.leavingFree = false;
+      pushNews(save, {
+        type: 'transfer',
+        title: `Contrato renovado: ${player.name}`,
+        body: `Aceita a exigência — R$ ${wageFullDemand}k/mês por 3 anos. ${player.name} está feliz!`,
+      });
+      set({ save });
+      return 'ok';
+    }
+
+    if (choice === 'counter') {
+      // Jogadores elite (OVR>=80) podem recusar contraproposta (40% de chance)
+      if (topPlayer && Math.random() < 0.40) {
+        player.morale = Math.max(0, player.morale - 8);
+        pushNews(save, {
+          type: 'transfer',
+          title: `${player.name} recusou a contraproposta`,
+          body: `${player.name} (OVR ${player.overall}) rejeitou R$ ${wageCounter}k/mês. Exige no mínimo R$ ${wageFullDemand}k. Renove com a exigência dele ou ele sairá livre.`,
+        });
+        player.leavingFree = true;
+        set({ save });
+        return 'refused';
+      }
+      const bonus = Math.round(wageCounter * 0.3);
+      if (userTeam.budget < bonus) { set({ save }); return 'no_budget'; }
+      userTeam.budget -= bonus;
+      player.wageMonthly = wageCounter;
+      player.contractUntil = save.season + 2;
+      player.morale = Math.min(100, player.morale + 5);
+      player.leavingFree = false;
+      pushNews(save, {
+        type: 'transfer',
+        title: `Contrato renovado: ${player.name}`,
+        body: `Contraproposta aceita — R$ ${wageCounter}k/mês por 2 anos. ${player.name} ficou razoavelmente satisfeito.`,
+      });
+      set({ save });
+      return 'ok';
+    }
+
+    // 'minimal'
+    if (topPlayer && Math.random() < 0.70) {
+      player.morale = Math.max(0, player.morale - 15);
+      pushNews(save, {
+        type: 'transfer',
+        title: `${player.name} rejeitou a renovação mínima`,
+        body: `R$ ${wageMinimal}k foi considerado insultante por ${player.name} (OVR ${player.overall}). Ele vai sair como livre ao final da temporada.`,
+      });
+      player.leavingFree = true;
+      set({ save });
+      return 'refused';
+    }
+    const bonusMin = Math.round(wageMinimal * 0.2);
+    if (userTeam.budget < bonusMin) { set({ save }); return 'no_budget'; }
+    userTeam.budget -= bonusMin;
+    player.wageMonthly = wageMinimal;
+    player.contractUntil = save.season + 1;
+    player.morale = Math.max(0, player.morale - 10);
+    player.leavingFree = false;
+    pushNews(save, {
+      type: 'transfer',
+      title: `Contrato renovado: ${player.name}`,
+      body: `Renovação mínima aceita — R$ ${wageMinimal}k/mês por 1 ano. ${player.name} está insatisfeito.`,
+    });
+    set({ save });
+    return 'ok';
+  },
+
   changePlayerPosition(playerId, newPosition) {
     const state = get();
     if (!state.save) return;
@@ -2152,11 +2257,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     const [player] = save.youthPlayers.splice(idx, 1);
     const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
     if (userTeam) {
-      if (userTeam.squad.length >= 30) {
+      if (userTeam.squad.length >= 35) {
         pushNews(save, {
           type: 'general',
           title: 'Elenco cheio',
-          body: `Limite de 30 jogadores atingido. Libere ou venda um atleta antes de promover ${player.name}.`,
+          body: `Limite de 35 jogadores atingido. Libere ou venda um atleta antes de promover ${player.name}.`,
         });
         set({ save });
         return;
@@ -2684,7 +2789,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!report) return;
     const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
     if (!userTeam) return;
-    if (userTeam.squad.length >= 30) {
+    if (userTeam.squad.length >= 35) {
       pushNews(save, { type: 'general', title: 'Elenco cheio', body: 'Libere um atleta antes de contratar.' });
       set({ save }); return;
     }
@@ -2711,12 +2816,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     const fromTeam = save.teams.find((t) => t.id === offer.fromTeamId);
     const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
     if (!fromTeam || !userTeam) return;
-    if (userTeam.squad.length >= 30) {
+    if (offer.fromTeamId === save.controlledTeamId) return; // oferta stale do próprio time
+    if (userTeam.squad.length >= 35) {
       pushNews(save, { type: 'general', title: 'Elenco cheio', body: 'Libere um atleta antes de aceitar empréstimo.' });
       set({ save }); return;
     }
     const playerIdx = fromTeam.squad.findIndex((p) => p.id === offer.playerId);
-    if (playerIdx === -1) return;
+    if (playerIdx === -1) {
+      offer.status = 'expired';
+      pushNews(save, { type: 'general', title: 'Oferta expirada', body: 'O jogador não está mais disponível para empréstimo.' });
+      set({ save }); return;
+    }
     const player = fromTeam.squad[playerIdx];
     fromTeam.squad.splice(playerIdx, 1);
     fromTeam.starting11 = fromTeam.starting11.filter((id) => id !== player.id);
