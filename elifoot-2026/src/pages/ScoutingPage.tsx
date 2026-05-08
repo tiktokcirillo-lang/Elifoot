@@ -175,7 +175,7 @@ export default function ScoutingPage() {
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); signScoutedPlayer(report.id); }}
-                      disabled={(userTeam?.budget ?? 0) < report.estimatedValue || (userTeam?.squad.length ?? 0) >= 30}
+                      disabled={(userTeam?.budget ?? 0) < report.estimatedValue || (userTeam?.squad.length ?? 0) >= 35}
                       className="shrink-0 text-xs bg-green-600 hover:bg-green-700 disabled:bg-white/10 disabled:text-white/30 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition-colors"
                     >
                       Contratar<br className="hidden sm:block" />
@@ -219,7 +219,7 @@ export default function ScoutingPage() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => acceptLoanOffer(offer.id)}
-                          disabled={(userTeam?.squad.length ?? 0) >= 30}
+                          disabled={(userTeam?.squad.length ?? 0) >= 35}
                           className="text-xs bg-green-600 hover:bg-green-700 disabled:bg-white/10 disabled:text-white/30 disabled:cursor-not-allowed text-white px-3 py-1 rounded transition-colors"
                         >
                           Aceitar
