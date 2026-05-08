@@ -165,6 +165,10 @@ export interface SponsorOffer {
   id: string;
   brandId: string;
   brandName: string;
+  slot: 'master' | 'kit' | 'secondary';
+  brandCategory?: string;
+  brandColor?: string;
+  brandTier?: 'elite' | 'top' | 'mid' | 'low';
   valuePerSeason: number; // em milhares por temporada
   seasons: number; // duração do contrato em temporadas
   offeredAt: number; // turno da oferta
@@ -172,6 +176,12 @@ export interface SponsorOffer {
   status: 'pending' | 'active' | 'expired' | 'rejected';
   activeSince?: number; // temporada de início
   activeUntil?: number; // última temporada do contrato (inclusivo)
+  bonuses?: Array<{
+    condition: 'title' | 'libertadores' | 'top3_league' | 'fan_high';
+    amount: number;
+    description: string;
+  }>;
+  counterOffered?: boolean;
 }
 
 export type Foot = 'L' | 'R' | 'B';

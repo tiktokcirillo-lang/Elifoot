@@ -18,7 +18,7 @@ import type {
   ManagerJobOffer,
   PressConferenceOption,
 } from '@/types';
-import { SPONSOR_BRANDS } from '@/data/sponsors';
+import { SPONSOR_BRANDS, SLOT_LABELS } from '@/data/sponsors';
 import { MANAGER_SKILLS } from '@/data/managerSkills';
 import { generateAiManagers, updateAiManagersAfterSeason } from '@/data/managerNames';
 import { simulateMatch, simulatePenaltyShootout } from '@/engine/matchSimulator';
@@ -158,6 +158,7 @@ interface GameState {
   // Patrocínios
   acceptSponsorOffer: (offerId: string) => void;
   rejectSponsorOffer: (offerId: string) => void;
+  negotiateSponsorOffer: (offerId: string) => void;
 
   // Carreira
   switchTeam: (teamId: string) => void;
@@ -698,41 +699,117 @@ function processAITransfers(save: SaveGame): void {
   );
 }
 
-function generateSponsorOffer(save: SaveGame): void {
+function generateSponsorOffers(save: SaveGame): void {
   const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
   if (!userTeam) return;
 
-  const eligible = SPONSOR_BRANDS.filter((b) => userTeam.reputation >= b.minReputation);
-  if (eligible.length === 0) return;
+  const slots = ['master', 'kit', 'secondary'] as const;
 
-  const pendingBrandIds = new Set(
-    save.sponsorOffers.filter((o) => o.status === 'pending').map((o) => o.brandId),
+  for (const slot of slots) {
+    // Skip if this slot already has a pending offer
+    const hasPending = save.sponsorOffers.some((o) => o.slot === slot && o.status === 'pending');
+    if (hasPending) continue;
+
+    const eligible = SPONSOR_BRANDS.filter(
+      (b) => b.slot === slot && userTeam.reputation >= b.minReputation,
+    );
+    if (eligible.length === 0) continue;
+
+    // Exclude brands already active or pending in this slot
+    const occupiedBrandIds = new Set(
+      save.sponsorOffers
+        .filter((o) => o.slot === slot && (o.status === 'active' || o.status === 'pending'))
+        .map((o) => o.brandId),
+    );
+    const candidates = eligible.filter((b) => !occupiedBrandIds.has(b.id));
+    if (candidates.length === 0) continue;
+
+    const brand = candidates[Math.floor(Math.random() * candidates.length)];
+    const repRatio = Math.min(1, userTeam.reputation / 100);
+    const value = Math.round(brand.maxDealPerSeason * repRatio * (0.7 + Math.random() * 0.35));
+    const seasons = 1 + Math.floor(Math.random() * 3);
+
+    const offer: SponsorOffer = {
+      id: nanoid(8),
+      brandId: brand.id,
+      brandName: brand.name,
+      slot,
+      brandCategory: brand.category,
+      brandColor: brand.color,
+      brandTier: brand.tier,
+      valuePerSeason: value,
+      seasons,
+      offeredAt: save.currentTurn,
+      expiresAt: save.currentTurn + 28,
+      status: 'pending',
+      bonuses: brand.bonusPool ?? [],
+    };
+
+    save.sponsorOffers.push(offer);
+    pushNews(save, {
+      type: 'finance',
+      title: `Proposta: ${brand.name}`,
+      body: `${brand.name} oferece R$ ${(value / 1000).toFixed(1)}M/temp. por ${seasons} temp. (${SLOT_LABELS[slot]}) — acesse Patrocínios.`,
+    });
+  }
+}
+
+function paySeasonEndSponsorBonuses(save: SaveGame): void {
+  const userTeam = save.teams.find((t) => t.id === save.controlledTeamId);
+  if (!userTeam) return;
+
+  const activeWithBonuses = (save.sponsorOffers ?? []).filter(
+    (o) =>
+      o.status === 'active' &&
+      o.activeUntil != null &&
+      o.activeUntil >= save.season &&
+      o.bonuses &&
+      o.bonuses.length > 0,
   );
-  const candidates = eligible.filter((b) => !pendingBrandIds.has(b.id));
-  if (candidates.length === 0) return;
+  if (activeWithBonuses.length === 0) return;
 
-  const brand = candidates[Math.floor(Math.random() * candidates.length)];
-  const repRatio = Math.min(1, userTeam.reputation / 100);
-  const value = Math.round(brand.maxDealPerSeason * repRatio * (0.7 + Math.random() * 0.35));
-  const seasons = 1 + Math.floor(Math.random() * 3);
+  const leagueComp = save.competitions.find((c) => c.format === 'round_robin');
+  const leagueSorted = leagueComp?.standings
+    ? [...leagueComp.standings].sort(
+        (a, b) =>
+          (b.points - a.points) ||
+          ((b.goalsFor - b.goalsAgainst) - (a.goalsFor - a.goalsAgainst)),
+      )
+    : [];
+  const userLeaguePos = leagueSorted.findIndex((s) => s.teamId === save.controlledTeamId) + 1;
 
-  const offer: SponsorOffer = {
-    id: nanoid(8),
-    brandId: brand.id,
-    brandName: brand.name,
-    valuePerSeason: value,
-    seasons,
-    offeredAt: save.currentTurn,
-    expiresAt: save.currentTurn + 28,
-    status: 'pending',
-  };
+  const wonTitle       = save.competitions.some((c) => c.championId === save.controlledTeamId);
+  const wonLibertadores = save.competitions.some(
+    (c) => c.championId === save.controlledTeamId && c.name.toLowerCase().includes('libertadores'),
+  );
+  const isTop3  = userLeaguePos > 0 && userLeaguePos <= 3;
+  const fanHigh = (save.fanSatisfaction ?? 50) >= 80;
 
-  save.sponsorOffers.push(offer);
-  pushNews(save, {
-    type: 'finance',
-    title: `Proposta de patrocínio: ${brand.name}`,
-    body: `${brand.name} oferece R$ ${(value / 1000).toFixed(1)}M/temporada por ${seasons} temporada(s). Válida por 28 dias — acesse Patrocínios.`,
-  });
+  for (const offer of activeWithBonuses) {
+    for (const bonus of (offer.bonuses ?? [])) {
+      const met =
+        (bonus.condition === 'title'       && wonTitle)        ||
+        (bonus.condition === 'libertadores' && wonLibertadores) ||
+        (bonus.condition === 'top3_league'  && isTop3)          ||
+        (bonus.condition === 'fan_high'     && fanHigh);
+
+      if (!met) continue;
+
+      userTeam.budget += bonus.amount;
+      save.financeHistory.push({
+        id: nanoid(8),
+        turn: save.currentTurn,
+        type: 'sponsor',
+        amount: bonus.amount,
+        description: `Bônus ${offer.brandName}: ${bonus.description}`,
+      });
+      pushNews(save, {
+        type: 'finance',
+        title: `Bônus de patrocínio: ${offer.brandName}`,
+        body: `${bonus.description} — R$ ${(bonus.amount / 1000).toFixed(1)}M creditados!`,
+      });
+    }
+  }
 }
 
 function executeTransfer(listing: TransferListing, bid: TransferBid, save: SaveGame) {
@@ -979,6 +1056,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       ];
       if (loaded.managerWarnings === undefined) loaded.managerWarnings = 0;
       if (!loaded.sponsorOffers)             loaded.sponsorOffers   = [];
+      // Compat: add slot to old sponsor offers that predate the 3-slot system
+      loaded.sponsorOffers.forEach((o: SponsorOffer) => { if (!o.slot) (o as any).slot = 'master'; });
       if (loaded.managerReputation === undefined) loaded.managerReputation = 0;
       if (loaded.managerXP         === undefined) loaded.managerXP         = 0;
       if (loaded.managerXPSpent    === undefined) loaded.managerXPSpent    = 0;
@@ -1189,6 +1268,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Detecta fim de temporada
     if (!save.seasonOver && isSeasonOver(save)) {
       processSeasonEnd(save);
+      paySeasonEndSponsorBonuses(save);
       updateAiManagersAfterSeason(save);
       if (!save.aiManagers || save.aiManagers.length === 0) {
         save.aiManagers = generateAiManagers(save.teams, save.season);
@@ -1244,7 +1324,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       !save.dismissed &&
       (save.currentTurn === 14 || (save.currentTurn > 14 && save.currentTurn % 35 === 0))
     ) {
-      generateSponsorOffer(save);
+      generateSponsorOffers(save);
     }
 
     // Scout: entrega relatório quando missão termina
@@ -2440,9 +2520,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     const offer = save.sponsorOffers.find((o) => o.id === offerId);
     if (!offer || offer.status !== 'pending') return;
 
-    // Encerra deal ativo anterior
+    // Encerra deal ativo anterior no mesmo slot (ou ofertas antigas sem slot)
     save.sponsorOffers
-      .filter((o) => o.status === 'active')
+      .filter((o) => o.status === 'active' && (!o.slot || o.slot === offer.slot))
       .forEach((o) => { o.status = 'expired'; });
 
     offer.status = 'active';
@@ -2465,6 +2545,35 @@ export const useGameStore = create<GameState>((set, get) => ({
     const offer = save.sponsorOffers.find((o) => o.id === offerId);
     if (!offer || offer.status !== 'pending') return;
     offer.status = 'rejected';
+    set({ save });
+  },
+
+  negotiateSponsorOffer(offerId) {
+    const state = get();
+    if (!state.save) return;
+    const save = JSON.parse(JSON.stringify(state.save)) as SaveGame;
+    const offer = save.sponsorOffers.find((o) => o.id === offerId);
+    if (!offer || offer.status !== 'pending' || offer.counterOffered) return;
+
+    offer.counterOffered = true;
+    const higher = Math.round(offer.valuePerSeason * 1.20);
+
+    if (Math.random() < 0.50) {
+      offer.valuePerSeason = higher;
+      pushNews(save, {
+        type: 'finance',
+        title: `${offer.brandName} aceita a contraproposta!`,
+        body: `Nova oferta: R$ ${(higher / 1000).toFixed(1)}M/temporada (+20%). Confirme em Patrocínios.`,
+      });
+    } else {
+      offer.status = 'rejected';
+      pushNews(save, {
+        type: 'finance',
+        title: `${offer.brandName} rejeitou a contraproposta`,
+        body: `A marca preferiu retirar a oferta. Novas propostas chegam em breve.`,
+      });
+    }
+
     set({ save });
   },
 
