@@ -217,6 +217,7 @@ function resolveGroupKnockoutComp(comp: Competition, save: SaveGame): void {
     if (!comp.groups) return;
     const groupNames = Object.keys(comp.groups).sort();
     const qualifiers: string[] = [];
+    const thirdPlaces: { teamId: string; pts: number; gd: number; gf: number }[] = [];
 
     for (const g of groupNames) {
       const gs = sortStandings(
@@ -227,14 +228,31 @@ function resolveGroupKnockoutComp(comp: Competition, save: SaveGame): void {
         qualifiers.push(gs[0].teamId); // 1º do grupo
         qualifiers.push(gs[1].teamId); // 2º do grupo
       }
+      // Coleta 3ºs lugares para Copa do Mundo (12 grupos)
+      if (gs.length >= 3 && groupNames.length >= 12) {
+        const s = gs[2];
+        thirdPlaces.push({
+          teamId: s.teamId,
+          pts: s.points,
+          gd: s.goalsFor - s.goalsAgainst,
+          gf: s.goalsFor,
+        });
+      }
     }
 
-    // 2 qualifiers → final direto | 4 → semi | 8 → quartas | >8 → oitavas
+    // Copa do Mundo (12 grupos): adiciona os 8 melhores 3ºs → 32 times no mata-mata
+    if (groupNames.length >= 12 && thirdPlaces.length > 0) {
+      thirdPlaces.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+      thirdPlaces.slice(0, 8).forEach((tp) => qualifiers.push(tp.teamId));
+    }
+
+    // 2 → final | 4 → sf | 8 → qf | ≤16 → r16 | >16 → r32
     const knockoutStage: KnockoutPair['stage'] =
-      qualifiers.length <= 2 ? 'final' :
-      qualifiers.length <= 4 ? 'sf' :
-      qualifiers.length <= 8 ? 'qf' :
-      'r16';
+      qualifiers.length <= 2  ? 'final' :
+      qualifiers.length <= 4  ? 'sf' :
+      qualifiers.length <= 8  ? 'qf' :
+      qualifiers.length <= 16 ? 'r16' :
+      'r32';
     // Cruza grupos: 1ºA vs 2ºB, 1ºB vs 2ºA …
     const crossed: string[] = [];
     const half = groupNames.length;

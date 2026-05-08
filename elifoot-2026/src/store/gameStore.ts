@@ -20,6 +20,7 @@ import type {
 } from '@/types';
 import { SPONSOR_BRANDS } from '@/data/sponsors';
 import { MANAGER_SKILLS } from '@/data/managerSkills';
+import { generateAiManagers, updateAiManagersAfterSeason } from '@/data/managerNames';
 import { simulateMatch, simulatePenaltyShootout } from '@/engine/matchSimulator';
 import {
   createBrasileirao,
@@ -521,22 +522,26 @@ function generateInitialCompetitions(
     result.push(serieC);
   }
 
-  // ── Copa do Mundo (a cada 4 temporadas: 2026, 2030, 2034…) ──
+  // ── Copa do Mundo 2026 (48 seleções, 12 grupos de 4) ────────
   const isWorldCupSeason = (season - 2026) % 4 === 0;
   if (isWorldCupSeason) {
     const copaMundoIds = allTeams
       .filter((t) => COPA_MUNDO_SEEDS.some((s) => s.id === t.id))
       .map((t) => t.id);
-    if (copaMundoIds.length >= 16) {
+    if (copaMundoIds.length >= 12) {
+      // Usa até 48 times; preenche com os disponíveis se menos de 48
+      const slots = copaMundoIds.slice(0, 48);
+      const numGroups = Math.min(12, Math.floor(slots.length / 4));
+      const numTeams  = numGroups * 4;
       const copaMundo = createGroupsKnockout({
-        teamIds: copaMundoIds.slice(0, 16),
-        numberOfGroups: 4,
+        teamIds: slots.slice(0, numTeams),
+        numberOfGroups: numGroups,
         teamsPerGroup: 4,
         season,
-        startTurn: 220,
+        startTurn: 210,
         turnsBetweenRounds: 7,
         turnsBetweenLegs: 7,
-        name: 'Copa do Mundo FIFA',
+        name: 'Copa do Mundo FIFA 2026',
         shortName: 'Copa do Mundo',
         knockoutTwoLeg: false,
         seed: season * 1000 + 8,
@@ -937,6 +942,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isNationalTeamManager: false,
       nationalTeamSquad: [],
       nationalTeamResults: [],
+      aiManagers: generateAiManagers(allTeams, 2026),
     };
 
     pushNews(save, {
@@ -1018,6 +1024,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       // Compat: national team fields
       if (loaded.isNationalTeamManager === undefined) loaded.isNationalTeamManager = false;
+      // Compat: AI managers
+      if (!loaded.aiManagers || loaded.aiManagers.length === 0) {
+        loaded.aiManagers = generateAiManagers(loaded.teams, loaded.season);
+      }
       if (!loaded.nationalTeamSquad) loaded.nationalTeamSquad = [];
       if (!loaded.nationalTeamResults) loaded.nationalTeamResults = [];
       if (loaded.wageOverBudgetWeeks === undefined) loaded.wageOverBudgetWeeks = 0;
@@ -1179,6 +1189,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Detecta fim de temporada
     if (!save.seasonOver && isSeasonOver(save)) {
       processSeasonEnd(save);
+      updateAiManagersAfterSeason(save);
+      if (!save.aiManagers || save.aiManagers.length === 0) {
+        save.aiManagers = generateAiManagers(save.teams, save.season);
+      }
       pushNews(save, {
         type: 'achievement',
         title: `Temporada ${save.season} encerrada!`,
@@ -1417,23 +1431,27 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
-    // Convite de seleção nacional (rep >= 2000, a cada 56 turnos, sem oferta ativa)
+    // Convite de seleção nacional: rep >= 2000 E melhor ou entre top 3 técnicos
     if (!save.isNationalTeamManager && !save.nationalTeamOffer && save.currentTurn % 56 === 0) {
       const rep = save.managerReputation ?? 0;
       if (rep >= 2000) {
-        const offer: import('@/types').NationalTeamOffer = {
-          country: 'BR',
-          teamName: 'Seleção Brasileira',
-          teamId: 'nt_bra',
-          salary: 500,
-          expiresAt: save.currentTurn + 28,
-        };
-        save.nationalTeamOffer = offer;
-        pushNews(save, {
-          type: 'achievement',
-          title: 'Convite da Seleção Brasileira!',
-          body: 'Você recebeu um convite para comandar a Seleção Brasileira. Acesse a aba Seleção Nacional para responder.',
-        });
+        const topAiRep = (save.aiManagers ?? []).reduce((max, m) => Math.max(max, m.reputation), 0);
+        const isTopManager = rep >= topAiRep * 0.8; // dentro de 80% do melhor IA
+        if (isTopManager) {
+          const offer: import('@/types').NationalTeamOffer = {
+            country: 'BR',
+            teamName: 'Seleção Brasileira',
+            teamId: 'nt_bra',
+            salary: 500,
+            expiresAt: save.currentTurn + 28,
+          };
+          save.nationalTeamOffer = offer;
+          pushNews(save, {
+            type: 'achievement',
+            title: 'Convite da Seleção Brasileira!',
+            body: `Sua reputação de ${rep} pts está entre as mais altas do futebol. A CBF quer você no comando da Seleção. Acesse a aba Seleção Nacional para responder.`,
+          });
+        }
       }
     }
 

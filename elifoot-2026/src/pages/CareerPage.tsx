@@ -1,6 +1,7 @@
 import { useGameStore } from '@/store/gameStore';
 import { MANAGER_SKILLS, reputationTier } from '@/data/managerSkills';
-import { Star, Zap, Shield, TrendingUp, DollarSign, Users, Lock, CheckCircle, Trophy, Briefcase, Building2, X } from 'lucide-react';
+import { allManagerRanking } from '@/data/managerNames';
+import { Star, Zap, Shield, TrendingUp, DollarSign, Users, Lock, CheckCircle, Trophy, Briefcase, Building2, X, Medal } from 'lucide-react';
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   scouting:   <Users className="w-4 h-4" />,
@@ -260,6 +261,50 @@ export default function CareerPage() {
           </div>
         </div>
       )}
+
+      {/* Ranking de Técnicos */}
+      {(() => {
+        const ranking = allManagerRanking(save).slice(0, 15);
+        const userPos = ranking.findIndex((m) => m.isUser);
+        return (
+          <div className="panel p-5">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <Medal className="w-4 h-4 text-gold-400" /> Ranking Mundial de Técnicos
+            </h3>
+            <div className="space-y-1">
+              {ranking.map((mgr, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
+                    mgr.isUser ? 'bg-pitch-500/20 border border-pitch-500/40' : 'bg-white/3 border border-transparent'
+                  }`}
+                >
+                  <span className={`w-5 text-center font-bold text-xs shrink-0 ${
+                    i === 0 ? 'text-yellow-400' : i === 1 ? 'text-white/60' : i === 2 ? 'text-orange-400' : 'text-white/30'
+                  }`}>
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-semibold truncate text-xs ${mgr.isUser ? 'text-pitch-300' : ''}`}>
+                      {mgr.name} {mgr.isUser && <span className="text-[10px] text-pitch-400">(você)</span>}
+                    </div>
+                    <div className="text-[10px] text-white/40 truncate">{mgr.teamName}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-semibold text-gold-400">{mgr.reputation.toLocaleString('pt-BR')} pts</div>
+                    <div className="text-[10px] text-white/40">{mgr.titles} título(s)</div>
+                  </div>
+                </div>
+              ))}
+              {userPos === -1 && (
+                <div className="text-xs text-white/40 text-center pt-2">
+                  Você ainda não está no ranking — construa sua reputação!
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Como ganhar XP */}
       <div className="panel p-5">

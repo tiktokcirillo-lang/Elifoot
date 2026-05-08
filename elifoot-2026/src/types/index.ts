@@ -540,6 +540,16 @@ export interface NationalTeamResult {
   isHome: boolean;
 }
 
+export interface AiManager {
+  id: string;
+  teamId: string;
+  name: string;
+  reputation: number; // 0–10000
+  titles: number;
+  seasons: number;
+  teamName: string;
+}
+
 export interface NationalTeamOffer {
   country: string; // 'BR', 'AR', etc.
   teamName: string; // 'Brasil', 'Argentina', etc.
@@ -621,4 +631,6 @@ export interface SaveGame {
   nationalTeamSquad?: string[]; // player ids convocados (máx 23)
   nationalTeamResults?: NationalTeamResult[];
   nationalTeamOffer?: NationalTeamOffer;
+  // Técnicos das equipes IA
+  aiManagers?: AiManager[];
 }

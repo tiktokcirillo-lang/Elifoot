@@ -139,10 +139,22 @@ export const MUNDIAL_EXTRA_SEEDS: ExtraSeed[] = [
   { id: 'auc', name: 'Auckland City',        shortName: 'AKL', city: 'Auckland',      country: 'NZ', primaryColor: '#0d4ea2', secondaryColor: '#ffffff', tier: 'low', reputation: 55, budget: 100000, squadSeed: 611 },
 ];
 
-// Seleções nacionais para a Copa do Mundo FIFA (a cada 4 temporadas)
+// Seleções nacionais para a Copa do Mundo FIFA 2026 — 48 seleções
+// UEFA (16): BRA, ARG, FRA, GER, ENG, ESP, POR, NED, ITA, CRO, BEL, SUI, DEN, AUT, SRB, POL
+// CAF  (9):  MAR, SEN, NGA, EGY, CMR, CIV, GHA, ALG, TUN
+// AFC  (8):  JAP, KOR, IRN, AUS, SAU, QAT, IDN, JOR
+// CONMEBOL (6): BRA, ARG, URU, COL, CHI, ECU
+// CONCACAF (6): USA, MEX, CAN, CRC, PAN, HON
+// OFC  (1):  NZL
 export const COPA_MUNDO_SEEDS: ExtraSeed[] = [
+  // ── CONMEBOL ────────────────────────────────────────────────
   { id: 'nt_bra', name: 'Brasil',          shortName: 'BRA', city: 'Brasília',         country: 'BR', primaryColor: '#009c3b', secondaryColor: '#ffdf00', tier: 'elite', reputation: 95, budget: 0, squadSeed: 701 },
   { id: 'nt_arg', name: 'Argentina',       shortName: 'ARG', city: 'Buenos Aires',     country: 'AR', primaryColor: '#74acdf', secondaryColor: '#ffffff', tier: 'elite', reputation: 93, budget: 0, squadSeed: 702 },
+  { id: 'nt_uru', name: 'Uruguai',         shortName: 'URU', city: 'Montevidéu',       country: 'UY', primaryColor: '#74acdf', secondaryColor: '#000000', tier: 'mid',   reputation: 80, budget: 0, squadSeed: 710 },
+  { id: 'nt_col', name: 'Colômbia',        shortName: 'COL', city: 'Bogotá',           country: 'CO', primaryColor: '#fcd116', secondaryColor: '#003580', tier: 'mid',   reputation: 78, budget: 0, squadSeed: 711 },
+  { id: 'nt_chi', name: 'Chile',           shortName: 'CHI', city: 'Santiago',         country: 'CL', primaryColor: '#d52b1e', secondaryColor: '#ffffff', tier: 'mid',   reputation: 72, budget: 0, squadSeed: 740 },
+  { id: 'nt_ecu', name: 'Equador',         shortName: 'ECU', city: 'Quito',            country: 'EC', primaryColor: '#ffda00', secondaryColor: '#003580', tier: 'low',   reputation: 65, budget: 0, squadSeed: 741 },
+  // ── UEFA ─────────────────────────────────────────────────────
   { id: 'nt_fra', name: 'França',          shortName: 'FRA', city: 'Paris',            country: 'FR', primaryColor: '#002395', secondaryColor: '#ffffff', tier: 'elite', reputation: 92, budget: 0, squadSeed: 703 },
   { id: 'nt_ger', name: 'Alemanha',        shortName: 'GER', city: 'Berlim',           country: 'DE', primaryColor: '#000000', secondaryColor: '#ffffff', tier: 'elite', reputation: 91, budget: 0, squadSeed: 704 },
   { id: 'nt_eng', name: 'Inglaterra',      shortName: 'ENG', city: 'Londres',          country: 'EN', primaryColor: '#ffffff', secondaryColor: '#003da5', tier: 'top',   reputation: 89, budget: 0, squadSeed: 705 },
@@ -150,13 +162,48 @@ export const COPA_MUNDO_SEEDS: ExtraSeed[] = [
   { id: 'nt_por', name: 'Portugal',        shortName: 'POR', city: 'Lisboa',           country: 'PT', primaryColor: '#006600', secondaryColor: '#e30613', tier: 'top',   reputation: 87, budget: 0, squadSeed: 707 },
   { id: 'nt_ned', name: 'Holanda',         shortName: 'NED', city: 'Amsterdã',         country: 'NL', primaryColor: '#ff6600', secondaryColor: '#003da5', tier: 'top',   reputation: 86, budget: 0, squadSeed: 708 },
   { id: 'nt_ita', name: 'Itália',          shortName: 'ITA', city: 'Roma',             country: 'IT', primaryColor: '#003da5', secondaryColor: '#ffffff', tier: 'top',   reputation: 85, budget: 0, squadSeed: 709 },
-  { id: 'nt_uru', name: 'Uruguai',         shortName: 'URU', city: 'Montevidéu',       country: 'UY', primaryColor: '#74acdf', secondaryColor: '#000000', tier: 'mid',   reputation: 80, budget: 0, squadSeed: 710 },
-  { id: 'nt_col', name: 'Colômbia',        shortName: 'COL', city: 'Bogotá',           country: 'CO', primaryColor: '#fcd116', secondaryColor: '#003580', tier: 'mid',   reputation: 78, budget: 0, squadSeed: 711 },
+  { id: 'nt_cro', name: 'Croácia',         shortName: 'CRO', city: 'Zagreb',           country: 'HR', primaryColor: '#ff0000', secondaryColor: '#ffffff', tier: 'top',   reputation: 83, budget: 0, squadSeed: 720 },
+  { id: 'nt_bel', name: 'Bélgica',         shortName: 'BEL', city: 'Bruxelas',         country: 'BE', primaryColor: '#000000', secondaryColor: '#ed2939', tier: 'top',   reputation: 82, budget: 0, squadSeed: 721 },
+  { id: 'nt_sui', name: 'Suíça',           shortName: 'SUI', city: 'Berna',            country: 'CH', primaryColor: '#ff0000', secondaryColor: '#ffffff', tier: 'mid',   reputation: 77, budget: 0, squadSeed: 722 },
+  { id: 'nt_den', name: 'Dinamarca',       shortName: 'DEN', city: 'Copenhague',       country: 'DK', primaryColor: '#c60c30', secondaryColor: '#ffffff', tier: 'mid',   reputation: 76, budget: 0, squadSeed: 723 },
+  { id: 'nt_aut', name: 'Áustria',         shortName: 'AUT', city: 'Viena',            country: 'AT', primaryColor: '#ed2939', secondaryColor: '#ffffff', tier: 'mid',   reputation: 73, budget: 0, squadSeed: 724 },
+  { id: 'nt_srb', name: 'Sérvia',          shortName: 'SRB', city: 'Belgrado',         country: 'RS', primaryColor: '#c6363c', secondaryColor: '#0c4076', tier: 'mid',   reputation: 72, budget: 0, squadSeed: 725 },
+  { id: 'nt_pol', name: 'Polônia',         shortName: 'POL', city: 'Varsóvia',         country: 'PL', primaryColor: '#dc143c', secondaryColor: '#ffffff', tier: 'mid',   reputation: 71, budget: 0, squadSeed: 726 },
+  // ── CONCACAF ─────────────────────────────────────────────────
   { id: 'nt_usa', name: 'Estados Unidos',  shortName: 'USA', city: 'Washington',       country: 'US', primaryColor: '#002868', secondaryColor: '#bf0a30', tier: 'mid',   reputation: 74, budget: 0, squadSeed: 712 },
   { id: 'nt_mex', name: 'México',          shortName: 'MEX', city: 'Cidade do México', country: 'MX', primaryColor: '#006847', secondaryColor: '#ffffff', tier: 'mid',   reputation: 73, budget: 0, squadSeed: 713 },
+  { id: 'nt_can', name: 'Canadá',          shortName: 'CAN', city: 'Ottawa',           country: 'CA', primaryColor: '#ff0000', secondaryColor: '#ffffff', tier: 'mid',   reputation: 68, budget: 0, squadSeed: 742 },
+  { id: 'nt_crc', name: 'Costa Rica',      shortName: 'CRC', city: 'San José',         country: 'CR', primaryColor: '#002B7F', secondaryColor: '#CE1126', tier: 'low',   reputation: 60, budget: 0, squadSeed: 743 },
+  { id: 'nt_pan', name: 'Panamá',          shortName: 'PAN', city: 'Cidade do Panamá', country: 'PA', primaryColor: '#005293', secondaryColor: '#C30020', tier: 'low',   reputation: 58, budget: 0, squadSeed: 744 },
+  { id: 'nt_hon', name: 'Honduras',        shortName: 'HON', city: 'Tegucigalpa',      country: 'HN', primaryColor: '#0073CF', secondaryColor: '#ffffff', tier: 'low',   reputation: 55, budget: 0, squadSeed: 745 },
+  // ── AFC ──────────────────────────────────────────────────────
   { id: 'nt_jap', name: 'Japão',           shortName: 'JAP', city: 'Tóquio',           country: 'JP', primaryColor: '#003da5', secondaryColor: '#e30613', tier: 'mid',   reputation: 72, budget: 0, squadSeed: 714 },
+  { id: 'nt_kor', name: 'Coreia do Sul',   shortName: 'KOR', city: 'Seul',             country: 'KR', primaryColor: '#c60c30', secondaryColor: '#003478', tier: 'mid',   reputation: 71, budget: 0, squadSeed: 730 },
+  { id: 'nt_irn', name: 'Irã',             shortName: 'IRN', city: 'Teerã',            country: 'IR', primaryColor: '#239f40', secondaryColor: '#ffffff', tier: 'mid',   reputation: 68, budget: 0, squadSeed: 731 },
+  { id: 'nt_aus', name: 'Austrália',       shortName: 'AUS', city: 'Sydney',           country: 'AU', primaryColor: '#ffcd00', secondaryColor: '#00843d', tier: 'mid',   reputation: 67, budget: 0, squadSeed: 732 },
+  { id: 'nt_sau', name: 'Arábia Saudita',  shortName: 'SAU', city: 'Riade',            country: 'SA', primaryColor: '#007a3d', secondaryColor: '#ffffff', tier: 'low',   reputation: 63, budget: 0, squadSeed: 733 },
+  { id: 'nt_qat', name: 'Catar',           shortName: 'QAT', city: 'Doha',             country: 'QA', primaryColor: '#8d1b3d', secondaryColor: '#ffffff', tier: 'low',   reputation: 60, budget: 0, squadSeed: 734 },
+  { id: 'nt_idn', name: 'Indonésia',       shortName: 'IDN', city: 'Jacarta',          country: 'ID', primaryColor: '#ce1126', secondaryColor: '#ffffff', tier: 'low',   reputation: 52, budget: 0, squadSeed: 735 },
+  { id: 'nt_jor', name: 'Jordânia',        shortName: 'JOR', city: 'Amã',              country: 'JO', primaryColor: '#007a3d', secondaryColor: '#000000', tier: 'low',   reputation: 51, budget: 0, squadSeed: 736 },
+  // ── CAF ──────────────────────────────────────────────────────
   { id: 'nt_mar', name: 'Marrocos',        shortName: 'MAR', city: 'Rabat',            country: 'MA', primaryColor: '#c1272d', secondaryColor: '#006233', tier: 'mid',   reputation: 71, budget: 0, squadSeed: 715 },
   { id: 'nt_sen', name: 'Senegal',         shortName: 'SEN', city: 'Dacar',            country: 'SN', primaryColor: '#00853f', secondaryColor: '#ffd700', tier: 'mid',   reputation: 70, budget: 0, squadSeed: 716 },
+  { id: 'nt_nga', name: 'Nigéria',         shortName: 'NGA', city: 'Abuja',            country: 'NG', primaryColor: '#008751', secondaryColor: '#ffffff', tier: 'mid',   reputation: 69, budget: 0, squadSeed: 750 },
+  { id: 'nt_egy', name: 'Egito',           shortName: 'EGY', city: 'Cairo',            country: 'EG', primaryColor: '#c8102e', secondaryColor: '#000000', tier: 'mid',   reputation: 67, budget: 0, squadSeed: 751 },
+  { id: 'nt_cmr', name: 'Camarões',        shortName: 'CMR', city: 'Yaoundé',          country: 'CM', primaryColor: '#007a5e', secondaryColor: '#ce1126', tier: 'mid',   reputation: 65, budget: 0, squadSeed: 752 },
+  { id: 'nt_civ', name: 'Costa do Marfim', shortName: 'CIV', city: 'Abidjan',          country: 'CI', primaryColor: '#f77f00', secondaryColor: '#009a44', tier: 'mid',   reputation: 64, budget: 0, squadSeed: 753 },
+  { id: 'nt_gha', name: 'Gana',            shortName: 'GHA', city: 'Acra',             country: 'GH', primaryColor: '#006b3f', secondaryColor: '#fcd116', tier: 'low',   reputation: 63, budget: 0, squadSeed: 754 },
+  { id: 'nt_alg', name: 'Argélia',         shortName: 'ALG', city: 'Argel',            country: 'DZ', primaryColor: '#006233', secondaryColor: '#ffffff', tier: 'low',   reputation: 62, budget: 0, squadSeed: 755 },
+  { id: 'nt_tun', name: 'Tunísia',         shortName: 'TUN', city: 'Túnis',            country: 'TN', primaryColor: '#e70013', secondaryColor: '#ffffff', tier: 'low',   reputation: 60, budget: 0, squadSeed: 756 },
+  // ── Outros (para completar 48) ───────────────────────────────
+  { id: 'nt_slo', name: 'Eslovênia',       shortName: 'SLO', city: 'Liubliana',        country: 'SI', primaryColor: '#003da5', secondaryColor: '#ffffff', tier: 'low',   reputation: 58, budget: 0, squadSeed: 760 },
+  { id: 'nt_sco', name: 'Escócia',         shortName: 'SCO', city: 'Glasgow',          country: 'GB', primaryColor: '#003da5', secondaryColor: '#ffffff', tier: 'low',   reputation: 62, budget: 0, squadSeed: 761 },
+  { id: 'nt_tur', name: 'Turquia',         shortName: 'TUR', city: 'Ancara',           country: 'TR', primaryColor: '#e30a17', secondaryColor: '#ffffff', tier: 'mid',   reputation: 70, budget: 0, squadSeed: 762 },
+  { id: 'nt_gre', name: 'Grécia',          shortName: 'GRE', city: 'Atenas',           country: 'GR', primaryColor: '#0d5eaf', secondaryColor: '#ffffff', tier: 'low',   reputation: 60, budget: 0, squadSeed: 763 },
+  { id: 'nt_ven', name: 'Venezuela',       shortName: 'VEN', city: 'Caracas',          country: 'VE', primaryColor: '#cf142b', secondaryColor: '#003893', tier: 'low',   reputation: 55, budget: 0, squadSeed: 764 },
+  { id: 'nt_per', name: 'Peru',            shortName: 'PER', city: 'Lima',             country: 'PE', primaryColor: '#d91023', secondaryColor: '#ffffff', tier: 'low',   reputation: 62, budget: 0, squadSeed: 765 },
+  { id: 'nt_nzl', name: 'Nova Zelândia',   shortName: 'NZL', city: 'Wellington',       country: 'NZ', primaryColor: '#000000', secondaryColor: '#ffffff', tier: 'low',   reputation: 48, budget: 0, squadSeed: 766 },
+  { id: 'nt_uzb', name: 'Uzbequistão',     shortName: 'UZB', city: 'Tashkent',         country: 'UZ', primaryColor: '#1eb53a', secondaryColor: '#0099b5', tier: 'low',   reputation: 50, budget: 0, squadSeed: 767 },
 ];
 
 export function buildExtraTeams(seeds: ExtraSeed[]): Team[] {
